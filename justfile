@@ -7,3 +7,20 @@ fetch-chinook:
     rm chinook.db.zip
     mkdir -p data
     mv chinook.db data/chinook.db
+
+
+# Run all linters: Ruff, Black (check), Mypy
+lint:
+    ruff check .
+    black --check .
+    mypy .
+    vulture . --min-confidence 80
+    pip-audit -r requirements.txt
+
+lint-fix:
+    black .
+    ruff check --fix .
+
+# Run tests with coverage (same as CI)
+test:
+    pytest --maxfail=1 --disable-warnings --cov=./ --cov-report=xml

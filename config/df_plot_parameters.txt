@@ -142,4 +142,3 @@ include_boolbool, default is False
 backendstr, default None
 
     Backend to use instead of the backend specified in the option plotting.backend. For instance, ‘matplotlib’. Alternatively, to specify the plotting.backend for the whole session, set pd.options.plotting.backend.
-

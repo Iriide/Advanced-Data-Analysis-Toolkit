@@ -1,0 +1,11 @@
+sqlalchemy
+graphviz
+pydot
+google-genai
+matplotlib
+pandas
+numpy
+python-dotenv
+sqlalchemy-schemadisplay
+cairosvg
+pillow

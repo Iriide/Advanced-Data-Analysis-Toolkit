@@ -18,11 +18,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install System Dependencies
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y graphviz libcairo2
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
+
+      - name: Install just
+        uses: extractions/setup-just@v1
 
       - name: Install dependencies
         run: |
@@ -30,14 +37,8 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run Ruff (lint)
-        run: ruff check .
-
-      - name: Run Black (format check)
-        run: black --check .
-
-      - name: Run Mypy (type checking)
-        run: mypy .
+      - name: Run Lint
+        run: just lint
 
       - name: Run Tests
-        run: pytest --maxfail=1 --disable-warnings --cov=./ --cov-report=xml
+        run: just test
