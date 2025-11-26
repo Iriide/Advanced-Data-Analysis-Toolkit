@@ -42,3 +42,6 @@ jobs:
 
       - name: Run Tests
         run: just test
+
+      - name : Verify Coverage
+        run: just coverage

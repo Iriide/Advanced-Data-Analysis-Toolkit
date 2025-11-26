@@ -40,8 +40,15 @@ class DBInspector:
         """
         Executes a SQL query and returns the result as a DataFrame.
         """
-        with self.get_connection() as con:
-            return pd.read_sql(query, con=con)
+        con = self.get_connection()
+        try:
+            df = pd.read_sql(query, con=con)
+            return df
+        finally:
+            try:
+                con.close()
+            except Exception:
+                pass
 
     def describe_table(self, table: str) -> pd.DataFrame:
         """Generates statistical description of a specific table."""
@@ -107,7 +114,8 @@ class DBInspector:
 
     def describe_database(self) -> pd.DataFrame:
         """Generates statistical description for the entire database."""
-        with self.get_connection() as con:
+        con = self.get_connection()
+        try:
             cur = con.cursor()
             cur.execute(
                 "SELECT name "
@@ -117,6 +125,11 @@ class DBInspector:
                 "   AND name NOT LIKE 'sqlite_%';"
             )
             tables = [row[0] for row in cur.fetchall()]
+        finally:
+            try:
+                con.close()
+            except Exception:
+                pass
 
         db_description = []
         for table in tables:

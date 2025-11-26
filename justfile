@@ -14,13 +14,15 @@ lint:
     ruff check .
     black --check .
     mypy .
-    vulture . --min-confidence 80
+    vulture src/ . --exclude venv,tests --min-confidence 80
     pip-audit -r requirements.txt
 
 lint-fix:
     black .
     ruff check --fix .
 
-# Run tests with coverage (same as CI)
-test:
-    pytest --maxfail=1 --disable-warnings --cov=./ --cov-report=xml
+test *args:
+    pytest {{args}}
+
+coverage:
+    coverage report --fail-under=50

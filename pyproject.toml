@@ -6,7 +6,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
 mypy_path = "src"
-exclude = "^sketches/.*"
+exclude = "(^sketches/.*|^tests/.*)"
 
 # --- PER-MODULE OVERRIDES ---
 # (Keep these at the bottom of the config)
@@ -20,4 +20,10 @@ ignore_missing_imports = true
 # ignore_missing_imports = true
 
 [tool.ruff]
-exclude = ["sketches", "sketches/*"]
+exclude = ["sketches", "sketches/*", "tests", "tests/*"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+pythonpath = "src"
+addopts = "--cov=src --cov-report=term-missing -ra"

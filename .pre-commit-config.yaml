@@ -24,4 +24,4 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        exclude: ^sketches/
+        exclude: (^sketches/|^tests/)  # Exclude sketches and tests directories
