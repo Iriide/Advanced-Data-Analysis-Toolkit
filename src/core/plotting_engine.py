@@ -17,12 +17,8 @@ class PlottingEngine:
         """Renders DataFrame as a styled matplotlib table with dynamic column widths."""
 
         # --- 1. Calculate Column Widths ---
-        # We calculate the character length of the longest item in each column
-        # (comparing header vs. all data rows) to determine relative width.
         col_widths = []
         for col in df.columns:
-            # Max length of data in this column (converted to string)
-            # We use a fallback of 1 in case the column is empty/NaN
             max_data_len = (
                 df[col].astype(str).map(len).max() if not df[col].empty else 0
             )
@@ -31,15 +27,15 @@ class PlottingEngine:
             # Take the max and add a little padding (e.g., 2 chars)
             col_widths.append(max(max_data_len, header_len) + 2)
 
-        # Normalize widths so they sum to 1 (required for matplotlib relative widths)
-        # unless you want the table to be narrower than the plot area.
         total_chars = sum(col_widths)
+        # Calculate relative column widths based on max content length
         rel_widths = [w / total_chars for w in col_widths]
+        # Figure width is estimated by converting total character count to inches (heuristic: 0.12 inches per character)
 
         # --- 2. Dynamic Figure Size ---
-        # Estimate width: ~0.12 inches per character is a decent heuristic for 10pt font
-        fig_width = max(4, min(total_chars * 0.12, 20))  # Min 4 inches, Max 20 inches
-        # Estimate height: Header + Rows
+        fig_width = max(
+            4, min(total_chars * 0.12, 20)
+        )  # ~0.12 inches per character for 10pt
         fig_height = min(max(2, 0.4 * (len(df) + 1)), 10)
 
         fig, ax = plt.subplots(figsize=(fig_width, fig_height))
@@ -53,13 +49,11 @@ class PlottingEngine:
             colLabels=df.columns.tolist(),
             loc="center",
             cellLoc="center",
-            colWidths=rel_widths,  # <--- Apply calculated widths here
+            colWidths=rel_widths,
         )
 
         # --- 4. Styling ---
-        table.scale(
-            1, 1.5
-        )  # x-scale=1 (keep calculated widths), y-scale=1.5 (taller rows)
+        table.scale(1, 1.5)
         table.auto_set_font_size(False)
         table.set_fontsize(10)
 

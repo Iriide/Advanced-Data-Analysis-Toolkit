@@ -19,7 +19,6 @@ def configure_logging(
     logging.basicConfig(level=level, format=DEFAULT_LOG_FORMAT, handlers=handlers)
 
     if log_file:
-        # Add file handler in addition to stream handler
         fh = logging.FileHandler(log_file)
         fh.setLevel(level)
         fh.setFormatter(logging.Formatter(DEFAULT_LOG_FORMAT))

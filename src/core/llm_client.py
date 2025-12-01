@@ -31,9 +31,7 @@ class LLMClient:
             load_dotenv()
 
         if "GOOGLE_API_KEY" not in os.environ:
-            logger.warning("GOOGLE_API_KEY not found in environment variables.")
-            # Depending on strictness, you might want to raise an error here
-            # raise ValueError("GOOGLE_API_KEY not set")
+            raise ValueError("GOOGLE_API_KEY not set")
 
         self._model = model
         self._client = genai.Client()
@@ -58,18 +56,15 @@ class LLMClient:
                     model=self._model, contents=prompt
                 )
                 logger.debug("LLM API call succeeded on attempt %d", attempt)
-                # Ensure we return a str (some client response types are not typed)
                 return str(response.text)
             except Exception as e:
-                # Log a warning during retries to avoid noisy error level logs.
                 logger.warning(
                     "LLM API call failed on attempt %d/%d: %s", attempt, retries, e
                 )
                 if attempt == retries:
-                    # Final failure: include stack trace and re-raise
                     logger.exception("LLM API call failed after %d attempts", retries)
                     raise
-                time.sleep(1)  # Backoff slightly
+                time.sleep(1)
         return ""
 
     @staticmethod
@@ -87,12 +82,10 @@ class LLMClient:
         """
         pattern = f"```{block_type}"
         if text.startswith(pattern):
-            # Split by the header, take the rest, then rstrip the trailing ```
             parts = text.split(pattern, 1)
             if len(parts) > 1:
                 return parts[1].strip().rstrip("```").strip()
 
-        # Fallback: just strip backticks if strictly wrapped
         return text.strip("`").strip()
 
 
@@ -107,7 +100,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        # Try to ensure logging configured downstream if not already
         from core.logger import configure_logging
 
         configure_logging()

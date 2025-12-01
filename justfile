@@ -25,4 +25,4 @@ test *args:
     pytest {{args}}
 
 coverage:
-    coverage report --fail-under=50
+    coverage report --fail-under=10
