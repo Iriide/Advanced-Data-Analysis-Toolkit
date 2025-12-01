@@ -33,7 +33,9 @@ class PlottingEngine:
         # Figure width is estimated by converting total character count to inches (heuristic: 0.12 inches per character)
 
         # --- 2. Dynamic Figure Size ---
-        fig_width = max(4, min(total_chars * 0.12, 20)) # ~0.12 inches per character for 10pt
+        fig_width = max(
+            4, min(total_chars * 0.12, 20)
+        )  # ~0.12 inches per character for 10pt
         fig_height = min(max(2, 0.4 * (len(df) + 1)), 10)
 
         fig, ax = plt.subplots(figsize=(fig_width, fig_height))
