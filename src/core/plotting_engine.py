@@ -49,9 +49,7 @@ class PlottingEngine:
         )
 
         # --- 4. Styling ---
-        table.scale(
-            1, 1.5
-        )
+        table.scale(1, 1.5)
         table.auto_set_font_size(False)
         table.set_fontsize(10)
 
