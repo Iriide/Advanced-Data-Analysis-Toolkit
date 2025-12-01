@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-# Optional imports for Schema Plotting
 try:
     from sqlalchemy import create_engine, MetaData
     from sqlalchemy_schemadisplay import create_schema_graph

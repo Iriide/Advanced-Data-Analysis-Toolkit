@@ -14,12 +14,11 @@ repos:
       - id: black
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0  # Recommended update
+    rev: v0.8.0
     hooks:
       - id: ruff
         args: [ --fix ]
 
-  # Mypy (optional in pre-commit as it can be slow on large repos)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:

@@ -157,7 +157,6 @@ class LLMDataVisualizer:
 
         raw_response = self._llm_client.generate_content(prompt, retries)
         sql_query = self._llm_client.clean_markdown_block(raw_response, "sql")
-        # Log a concise summary for normal runs, full SQL at debug level
         if sql_query and len(sql_query) > 200:
             logger.info(
                 "Generated SQL (truncated): %s...", sql_query[:200].replace("\n", " ")
@@ -166,7 +165,6 @@ class LLMDataVisualizer:
         else:
             logger.info("Generated SQL: %s", sql_query)
 
-        # Execute and return
         try:
             df = self._db_inspector.run_query(sql_query)
             logger.info(

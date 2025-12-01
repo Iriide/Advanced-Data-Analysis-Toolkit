@@ -60,7 +60,6 @@ def main() -> None:
     # 0 (default) -> INFO (useful default for CLI),
     # 1 (-v) -> DEBUG (developer level)
     # 2+ (-vv) -> DEBUG with more verbosity enabled by downstream modules if needed
-    # This choice keeps normal runs informative while -v gives detailed debug output.
     if hasattr(args, "verbose"):
         if args.verbose == 0:
             level = logging.INFO
@@ -95,7 +94,6 @@ def main() -> None:
         schema_path = visualizer.plot_schema()
         if schema_path:
             logger.info("Schema saved to: %s", schema_path)
-            # Optional: Display if libraries exist
             try:
                 import cairosvg
                 from PIL import Image
