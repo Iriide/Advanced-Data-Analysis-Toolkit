@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-from typing import Dict, Any, Tuple, Optional, cast
+from typing import Dict, Any, Tuple, Optional
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.table import Table, Cell
-from backend.visualizer.services.logger import get_logger
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -15,7 +15,6 @@ MINIMUM_FIGURE_INCHES = 4
 HEADER_BACKGROUND_COLOR = "#40466e"
 ALTERNATE_ROW_COLOR = "#f5f5f5"
 CELL_EDGE_COLOR = "#dddddd"
-
 
 class PlottingEngine:
     """
@@ -155,8 +154,8 @@ class PlottingEngine:
             logger.warning(
                 "LLM recommended not to plot this result; showing table instead."
             )
-
         return axes, should_plot
+
 
     def _extract_figure_from_axes(self, axes: Any) -> Optional[Figure]:
         if hasattr(axes, "__iter__") and not isinstance(axes, Axes):

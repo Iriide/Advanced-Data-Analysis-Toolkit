@@ -5,18 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 from pathlib import Path
+
+# Import the orchestrator
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
-from backend.server.api import DummyServer
-from backend.visualizer.services.logger import configure_logging, get_logger
-
-logger: logging.Logger
-
-SAMPLE_QUESTIONS = [
-    "Give me a count of employees grouped by age?",
-    "What are the top 10 most used genres?",
-    "Which genre generated the highest revenue?",
-    "What are the revenues and the number of tracks sold for each genre?",
-]
+from backend.utils.logger import configure_logging, get_logger
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -62,6 +54,11 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional path to write logs to a file.",
     )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Enable server reloading.",
+    )
     return parser
 
 
@@ -85,8 +82,11 @@ def initialize_logging(arguments: argparse.Namespace) -> None:
 def run_server() -> None:
     logger.info("--- Starting Server ---")
     try:
-        server = DummyServer()
-        server.start()
+        import uvicorn
+
+        uvicorn.run(
+            "backend.server.api:app", host="0.0.0.0", port=8000, reload=args.dev
+        )
     except KeyboardInterrupt:
         logger.info("Server stopped by user.")
     return

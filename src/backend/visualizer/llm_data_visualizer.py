@@ -8,7 +8,7 @@ from matplotlib.axes import Axes
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
 from backend.visualizer.services.plotting_engine import PlottingEngine
-from backend.visualizer.services.logger import get_logger
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -81,13 +81,17 @@ class LLMDataVisualizer:
         ```
         # Instructions
 
-        Hello, knowing the schema, propose me a SQL query
-        that will answer this question: {question}
+        Based on the provided database schema, construct an SQL query
+        that answers the following question: "{question}".
 
-        Note that I use {self._database_type}.
-        Please make the result as informative and human readable as possible.
+        - The database type is {self._database_type}.
+        - Ensure the query is optimized and aggregates data where it makes sense.
+        - The result should be human-readable and provide meaningful insights.
+        - Avoid unnecessary complexity and ensure the query
+            is valid for the given database type.
 
-        Please provide ONLY the sql query, nothing else.
+        Please return ONLY the SQL query as plain text,
+        without any additional explanations or formatting.
         """
 
     def _construct_plot_prompt(self, question: str, dataframe: pd.DataFrame) -> str:

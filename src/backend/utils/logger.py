@@ -1,3 +1,9 @@
+"""Logging helpers for the backend services.
+
+Provide a simple `configure_logging` utility and a convenience
+function to retrieve a named logger.
+"""
+
 import logging
 from typing import Optional
 
@@ -25,4 +31,9 @@ def configure_logging(
 
 
 def get_logger(name: str) -> logging.Logger:
+    """Return a configured logger with the given `name`.
+
+    The returned logger will use the root configuration applied by
+    `configure_logging` if it has been called.
+    """
     return logging.getLogger(name)

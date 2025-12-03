@@ -197,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument("--db-path", type=str, default="data/chinook.db")
     arguments = parser.parse_args()
 
-    from backend.visualizer.services.logger import configure_logging, get_logger
+    from backend.utils.logger import configure_logging, get_logger
 
     configure_logging()
     logger = get_logger(__name__)

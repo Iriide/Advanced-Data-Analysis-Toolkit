@@ -1,0 +1,141 @@
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background-color: #f4f6f9;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 1.5rem; /* Slightly tighter padding for full screen */
+    height: 100%;
+}
+
+/* Row sizing to fill height */
+.row-fill {
+    flex: 1;
+    min-height: 0; /* Critical for nested flex scrolling */
+}
+
+/* Card Styling */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+    color: #2c3e50;
+    padding: 0.8rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.card-body {
+    padding: 0;
+    position: relative;
+    background-color: #e9ecef;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0; /* FIX: Allows flex child to shrink below content size */
+}
+
+/* Image Styling */
+.img-display {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.img-display.loaded {
+    opacity: 1;
+}
+
+/* Input Area Styling */
+.input-panel {
+    padding: 1.5rem;
+    background-color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+textarea {
+    resize: none;
+    border-color: #dee2e6;
+    border-radius: 8px;
+    flex: 1; /* Take remaining space */
+}
+
+textarea:focus {
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+}
+
+/* Header Colors */
+.header-blue { border-left: 4px solid #0d6efd; }
+.header-purple { border-left: 4px solid #6f42c1; }
+.header-green { border-left: 4px solid #198754; }
+.header-orange { border-left: 4px solid #fd7e14; }
+
+/* Loader */
+.loader {
+    position: absolute;
+    color: #adb5bd;
+}
+
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25em 0.6em;
+    border-radius: 10rem;
+    margin-left: auto;
+}
+
+/* Settings Button */
+.settings-btn {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    color: #6c757d;
+    border-radius: 50px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+.settings-btn:hover {
+    background: #e9ecef;
+    color: #0d6efd;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* Compact variant for small icon-only buttons (e.g. random question) */
+.settings-btn.compact {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+.settings-btn.compact i {
+    font-size: 0.9rem;
+}

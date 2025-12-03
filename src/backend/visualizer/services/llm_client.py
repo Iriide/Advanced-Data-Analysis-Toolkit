@@ -2,7 +2,7 @@ import os
 import time
 from google import genai
 from dotenv import load_dotenv
-from backend.visualizer.services.logger import get_logger
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -94,7 +94,7 @@ class LLMClient:
 
 if __name__ == "__main__":
     import argparse
-    from backend.visualizer.services.logger import configure_logging
+    from backend.utils.logger import configure_logging
 
     parser = argparse.ArgumentParser(description="Test the LLMClient independently.")
     parser.add_argument("--prompt", type=str, default="Hello, are you working?")
