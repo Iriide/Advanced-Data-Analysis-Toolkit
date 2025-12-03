@@ -160,7 +160,7 @@ class DBInspector:
             or None if dependencies missing.
         """
         if not HAS_SQLALCHEMY:
-            from core.logger import get_logger
+            from backend.utils.logger import get_logger
 
             logger = get_logger(__name__)
             logger.warning(
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     parser.add_argument("--db-path", type=str, default="data/chinook.db")
     args = parser.parse_args()
 
-    from core.logger import configure_logging, get_logger
+    from backend.utils.logger import configure_logging, get_logger
 
     configure_logging()
     logger = get_logger(__name__)

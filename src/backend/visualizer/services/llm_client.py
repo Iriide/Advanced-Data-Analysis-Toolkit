@@ -2,7 +2,7 @@ import os
 import time
 from google import genai
 from dotenv import load_dotenv
-from core.logger import get_logger
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     try:
         # Try to ensure logging configured downstream if not already
-        from core.logger import configure_logging
+        from backend.utils.logger import configure_logging
 
         configure_logging()
     except Exception:

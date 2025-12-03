@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional
 from matplotlib.axes import Axes
-from core.logger import get_logger
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -86,6 +86,7 @@ class PlottingEngine:
         plot_params: Dict[str, Any],
         should_plot: bool,
         show: bool = True,
+        figsize: Optional[Tuple[float, float]] = None,
         verbose: int = 0,
     ) -> Tuple[Optional[Axes], bool]:
         """
@@ -104,6 +105,9 @@ class PlottingEngine:
         """
         ax = None
         success = False
+
+        if figsize is not None:
+            plot_params["figsize"] = figsize
 
         if should_plot:
             try:

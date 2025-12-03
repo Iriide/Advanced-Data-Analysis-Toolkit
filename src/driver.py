@@ -4,9 +4,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 # Import the orchestrator
-from visualizer.llm_data_visualizer import LLMDataVisualizer
-from server.api import DummyServer
-from core.logger import configure_logging, get_logger
+from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
+from backend.utils.logger import configure_logging, get_logger
 import logging
 
 
@@ -54,6 +53,11 @@ def main() -> None:
         default=None,
         help="Optional path to write logs to a file.",
     )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Enable server reloading.",
+    )
     args = parser.parse_args()
 
     # Map verbosity count to logging level:
@@ -76,11 +80,14 @@ def main() -> None:
     if args.mode == "server":
         logger.info("--- Starting Server ---")
         try:
-            server = DummyServer()
-            server.start()
+            import uvicorn
+
+            uvicorn.run(
+                "backend.server.api:app", host="0.0.0.0", port=8000, reload=args.dev
+            )
         except KeyboardInterrupt:
             logger.info("Server stopped by user.")
-        return
+            exit(0)
 
     # CLI Mode
     db_path = Path(args.db_path)

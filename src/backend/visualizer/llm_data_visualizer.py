@@ -6,12 +6,10 @@ from pathlib import Path
 from typing import Optional, Tuple
 from matplotlib.axes import Axes
 
-# Import Core Services
-# Note: When running via driver.py, 'src' is in path.
-from core.db_inspector import DBInspector
-from core.llm_client import LLMClient
-from core.plotting_engine import PlottingEngine
-from core.logger import get_logger
+from backend.visualizer.services.db_inspector import DBInspector
+from backend.visualizer.services.llm_client import LLMClient
+from backend.visualizer.services.plotting_engine import PlottingEngine
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -40,7 +38,7 @@ class LLMDataVisualizer:
         if df_plot_parameters_file_path is None:
             # Assumes config is at project_root/config/ relative to this file
             # src/visualizer/ -> src/ -> root/ -> config/
-            root_dir = Path(__file__).resolve().parent.parent.parent
+            root_dir = Path(__file__).resolve().parent.parent.parent.parent
             df_plot_parameters_file_path = (
                 root_dir / "config" / "df_plot_parameters.txt"
             )
@@ -93,13 +91,17 @@ class LLMDataVisualizer:
 
         # Instructions
 
-        Hello, knowing the schema, propose me sql query
-        that will answer this question: {question}
+        Based on the provided database schema, construct an SQL query
+        that answers the following question: "{question}".
 
-        Note that I use {self._db_type}.
-        Please make the result as informative and human readable as possible.
+        - The database type is {self._db_type}.
+        - Ensure the query is optimized and aggregates data where it makes sense.
+        - The result should be human-readable and provide meaningful insights.
+        - Avoid unnecessary complexity and ensure the query
+            is valid for the given database type.
 
-        Please provide ONLY the sql query, nothing else.
+        Please return ONLY the SQL query as plain text,
+        without any additional explanations or formatting.
         """
 
     def _construct_plot_prompt(self, question: str, df: pd.DataFrame) -> str:
@@ -179,7 +181,12 @@ class LLMDataVisualizer:
             raise
 
     def question_to_plot(
-        self, question: str, retries: int = 3, show: bool = True, verbose: int = 1
+        self,
+        question: str,
+        retries: int = 3,
+        show: bool = True,
+        verbose: int = 1,
+        figsize: Optional[Tuple[float, float]] = (10, 6),
     ) -> Tuple[Optional[Axes], bool]:
         """Full pipeline: Question -> Visual."""
         # 1. Get Data
@@ -201,7 +208,9 @@ class LLMDataVisualizer:
             params = {}
 
         # 3. Plot
-        return self._plotting_engine.plot_data(df, params, should_plot, show, verbose)
+        return self._plotting_engine.plot_data(
+            df, params, should_plot, show, figsize, verbose
+        )
 
 
 if __name__ == "__main__":
