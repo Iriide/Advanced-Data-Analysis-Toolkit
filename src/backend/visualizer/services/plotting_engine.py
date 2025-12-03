@@ -120,6 +120,7 @@ class PlottingEngine:
         if not success:
             # If LLM said don't plot, or if plotting failed, show table
             _, ax = self._plot_df_as_table(df)
+            should_plot = False
 
         if show:
             plt.show()

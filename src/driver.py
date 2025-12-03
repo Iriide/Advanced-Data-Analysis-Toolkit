@@ -86,7 +86,6 @@ def main() -> None:
                 "backend.server.api:app", host="0.0.0.0", port=8000, reload=args.dev
             )
         except KeyboardInterrupt:
-            logger.info("Server stopped by user.")
             exit(0)
 
     # CLI Mode
