@@ -145,6 +145,7 @@ class PlottingEngine:
 
         if not plot_succeeded:
             _, axes = self._render_dataframe_as_table(dataframe)
+            should_plot = False
 
         if show:
             plt.show()

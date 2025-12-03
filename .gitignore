@@ -210,3 +210,4 @@ __marimo__/
 # project files
 
 **/**.db
+src/frontend/static/plots

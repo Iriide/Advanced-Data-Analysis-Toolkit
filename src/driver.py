@@ -10,6 +10,13 @@ from pathlib import Path
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 from backend.utils.logger import configure_logging, get_logger
 
+SAMPLE_QUESTIONS = [
+    "Give me a count of employees grouped by age?",
+    "What are the top 10 most used genres?",
+    "Which genre generated the highest revenue?",
+    "What are the revenues and the number of tracks sold for each genre?",
+]
+
 
 def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="LLM Data Visualizer Driver")
@@ -79,13 +86,13 @@ def initialize_logging(arguments: argparse.Namespace) -> None:
     logger = get_logger(__name__)
 
 
-def run_server() -> None:
+def run_server(arguments) -> None:
     logger.info("--- Starting Server ---")
     try:
         import uvicorn
 
         uvicorn.run(
-            "backend.server.api:app", host="0.0.0.0", port=8000, reload=args.dev
+            "backend.server.api:app", host="0.0.0.0", port=8000, reload=arguments.dev
         )
     except KeyboardInterrupt:
         logger.info("Server stopped by user.")
@@ -160,7 +167,7 @@ def main() -> None:
     initialize_logging(arguments)
 
     if arguments.mode == "server":
-        run_server()
+        run_server(arguments)
         return
 
     run_cli_mode(arguments)

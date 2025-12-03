@@ -139,3 +139,21 @@ textarea:focus {
 .settings-btn.compact i {
     font-size: 0.9rem;
 }
+
+/* Disabled appearance for settings-style buttons (result controls) */
+.settings-btn[disabled],
+.settings-btn[disabled].compact {
+    opacity: 0.45;
+    cursor: default;
+    background: #f8f9fa;
+    color: #9aa0a6;
+    border-color: #e6e9ec;
+    box-shadow: none;
+}
+.settings-btn[disabled]:hover {
+    background: #f8f9fa;
+    color: #9aa0a6;
+}
+.settings-btn[disabled] i {
+    color: #9aa0a6;
+}

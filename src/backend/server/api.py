@@ -1,8 +1,11 @@
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Any, Iterable, Dict
+from typing import Optional, Any, Iterable, Dict, AsyncGenerator
+import uuid
+import logging
 
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,7 +34,29 @@ class QuestionPayload(BaseModel):
     question: str
 
 
-app = FastAPI(title="Advanced Data Analysis Toolkit API")
+logger = logging.getLogger("uvicorn")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # --- Startup Logic (if any) ---
+    logger.info("Server starting up...")
+    yield
+    # --- Shutdown Logic (Runs when server stops) ---
+    print("do widzenia")
+
+    # Adjust path logic relative to THIS file location
+    # You might need to adjust parents depending on where api.py sits
+    plots_dir = Path(__file__).parents[2] / "frontend/static/plots"
+
+    if plots_dir.exists() and plots_dir.is_dir():
+        for plot_file in plots_dir.iterdir():
+            if plot_file.is_file():
+                plot_file.unlink()
+        logger.info("All plots removed from %s", plots_dir)
+
+
+app = FastAPI(lifespan=lifespan, title="Advanced Data Analysis Toolkit API")
 
 # Allow requests from file:// or local frontend during development
 app.add_middleware(
@@ -261,6 +286,10 @@ def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
     """
     viz = get_viz()
     try:
+        # 1) get dataframe (as pandas DataFrame)
+        df = viz.question_to_df(payload.question)
+
+        # 2) build plot (axes) -- do not show
         ax, should_plot = viz.question_to_plot(payload.question, show=False, verbose=1)
         if ax is None:
             raise RuntimeError("No axes generated for the question result")
@@ -269,13 +298,35 @@ def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
         if fmt not in ("png", "svg", "pdf"):
             fmt = "svg"
 
+        # 3) serialize image bytes
         img_bytes = ax_to_bytes(ax, fmt=fmt)
-        if fmt == "svg":
-            return Response(img_bytes, media_type="image/svg+xml")
-        if fmt == "pdf":
-            return Response(img_bytes, media_type="application/pdf")
-        # default PNG
-        return Response(img_bytes, media_type="image/png")
+
+        # 4) save image into frontend static plots directory so clients can fetch by URL
+        plots_dir = STATIC_DIR / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        ext = "svg" if fmt == "svg" else ("pdf" if fmt == "pdf" else "png")
+        filename = f"plot_{uuid.uuid4().hex}.{ext}"
+        file_path = plots_dir / filename
+        file_path.write_bytes(img_bytes)
+
+        image_url = f"/static/plots/{filename}"
+
+        # 5) convert DataFrame to JSON-serializable structure
+        if df is None or df.empty:
+            records = []
+            columns = []
+        else:
+            df2 = df.reset_index()
+            records = df2.to_dict(orient="records")
+            columns = df2.columns.tolist()
+
+        return JSONResponse(
+            content={
+                "df": {"columns": columns, "rows": records},
+                "image_url": image_url,
+                "should_plot": bool(should_plot),
+            }
+        )
     except Exception as e:
         logger.exception("Failed to generate plot for question: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
