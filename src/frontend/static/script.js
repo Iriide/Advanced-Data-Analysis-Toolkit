@@ -194,15 +194,25 @@ function showPreview(title, src) {
         obj.style.width = '100%';
         obj.style.height = '100%';
         obj.style.display = 'block';
+        // Embedded documents inside <object> do not always bubble pointer/wheel events
+        // to the parent. Disable pointer events on the object so the wrapper receives
+        // the interaction events used for pan/zoom. This prevents interacting with
+        // inner SVG links but enables reliable pan/zoom behaviour.
+        obj.style.pointerEvents = 'none';
         bodyEl.appendChild(obj);
         contentEl = obj;
     } else {
         const img = document.createElement('img');
         img.src = src;
+        // Prevent default browser drag behaviour which interferes with our
+        // custom panning (drag) handling.
+        img.draggable = false;
         img.style.maxWidth = '100%';
         img.style.maxHeight = '100%';
         img.style.objectFit = 'contain';
         img.style.display = 'block';
+        img.style.userSelect = 'none';
+        img.style.touchAction = 'none';
         bodyEl.appendChild(img);
         contentEl = img;
     }
@@ -288,11 +298,23 @@ function enablePanAndZoom(container, content) {
     // move content into the wrapper and center it
     // Use relative positioning so flexbox can center the element,
     // and set transform-origin to the element center for natural zooming.
-    content.style.position = 'absolute';
-    content.style.left = '50%';
-    content.style.top = '50%';
-
-    content.style.transformOrigin = '50% 50%';
+    // Reset sizing restrictions that could conflict with transforms so the
+    // element can be freely scaled/translated. Keep user-select/touch-action
+    // and draggable disabled for better interaction on touch and desktop.
+    try {
+        content.style.position = 'absolute';
+        content.style.left = '50%';
+        content.style.top = '50%';
+        content.style.transformOrigin = '50% 50%';
+        // remove max width/height constraints to allow transform scaling
+        content.style.maxWidth = 'none';
+        content.style.maxHeight = 'none';
+        content.style.width = 'auto';
+        content.style.height = 'auto';
+        content.draggable = false;
+        content.style.userSelect = 'none';
+        content.style.touchAction = 'none';
+    } catch (e) { }
 
     wrapper.appendChild(content);
     container.appendChild(wrapper);
@@ -347,6 +369,38 @@ function enablePanAndZoom(container, content) {
         applyTransform();
     }
 
+    // Touch support: map touch events to mouse-like pan interactions
+    let lastTouch = null;
+    function onTouchStart(e) {
+        if (!e.touches || e.touches.length === 0) return;
+        if (e.touches.length === 1) {
+            const t = e.touches[0];
+            dragging = true;
+            last = { x: t.clientX, y: t.clientY };
+            lastTouch = { id: t.identifier };
+            wrapper.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+    }
+
+    function onTouchMove(e) {
+        if (!dragging || !e.touches || e.touches.length === 0) return;
+        const t = e.touches[0];
+        const dx = t.clientX - last.x;
+        const dy = t.clientY - last.y;
+        last = { x: t.clientX, y: t.clientY };
+        translate.x += dx;
+        translate.y += dy;
+        applyTransform();
+        e.preventDefault();
+    }
+
+    function onTouchEnd(e) {
+        dragging = false;
+        lastTouch = null;
+        wrapper.style.cursor = 'default';
+    }
+
     function onMouseUp() {
         dragging = false;
         wrapper.style.cursor = 'default';
@@ -364,6 +418,10 @@ function enablePanAndZoom(container, content) {
     wrapper.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+    // touch listeners
+    wrapper.addEventListener('touchstart', onTouchStart, { passive: false });
+    wrapper.addEventListener('touchmove', onTouchMove, { passive: false });
+    wrapper.addEventListener('touchend', onTouchEnd);
     wrapper.addEventListener('dblclick', onDblClick);
 
     // initial transform
