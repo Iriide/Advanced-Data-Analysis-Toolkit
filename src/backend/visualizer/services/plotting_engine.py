@@ -1,3 +1,14 @@
+import matplotlib
+
+# Use a non-interactive backend to avoid starting a GUI (Tk) from
+# worker threads or server contexts. Must be set before importing
+# `pyplot`.
+try:
+    matplotlib.use("Agg")
+except Exception:
+    # If backend can't be set (already set elsewhere), continue.
+    pass
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional

@@ -103,6 +103,40 @@ textarea:focus {
     color: #adb5bd;
 }
 
+/* Smooth continuous rotation for loader icon: 60deg per second => full 360deg in 6s */
+.loader i {
+    display: inline-block; /* allow transform */
+    transform-origin: 50% 50%;
+}
+/* Font Awesome often renders the icon via a ::before pseudo-element.
+    Ensure both the <i> and its ::before receive transforms/animations. */
+.loader i::before {
+     display: inline-block;
+     transform-origin: 50% 50%;
+}
+
+@keyframes loader-step-spin {
+     0% { transform: rotate(0deg); }
+     33.33% { transform: rotate(110deg); }
+     66.66% { transform: rotate(260deg); }
+     100% { transform: rotate(360deg); }
+}
+
+/* @-webkit-keyframes loader-step-spin {
+     0% { -webkit-transform: rotate(0deg); transform: rotate(0deg); }
+     33.33% { -webkit-transform: rotate(110deg); transform: rotate(110deg); }
+     66.66% { -webkit-transform: rotate(260deg); transform: rotate(230deg); }
+     100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); }
+} */
+
+/* When loader has .show class, animate the inner icon with step rotation */
+/* .loader.show i, */
+.loader.show i::before {
+     animation: loader-step-spin 2s ease-in-out infinite;
+     -webkit-animation: loader-step-spin 2s ease-in-out infinite;
+     will-change: transform;
+}
+
 .status-badge {
     font-size: 0.75rem;
     padding: 0.25em 0.6em;
