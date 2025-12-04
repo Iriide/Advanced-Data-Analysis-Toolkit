@@ -280,18 +280,20 @@ function enablePanAndZoom(container, content) {
     wrapper.style.width = '100%';
     wrapper.style.height = '100%';
     wrapper.style.overflow = 'hidden';
-    wrapper.style.display = 'flex';
-    wrapper.style.alignItems = 'center';
-    wrapper.style.justifyContent = 'center';
+    // wrapper.style.display = 'flex';
+    // wrapper.style.alignItems = 'center';
+    // wrapper.style.justifyContent = 'center';
     wrapper.style.position = 'relative';
 
     // move content into the wrapper and center it
     // Use relative positioning so flexbox can center the element,
     // and set transform-origin to the element center for natural zooming.
-    content.style.position = 'relative';
-    content.style.left = '0%';
-    content.style.top = '0%';
+    content.style.position = 'absolute';
+    content.style.left = '50%';
+    content.style.top = '50%';
+
     content.style.transformOrigin = '50% 50%';
+
     wrapper.appendChild(content);
     container.appendChild(wrapper);
 
@@ -301,29 +303,27 @@ function enablePanAndZoom(container, content) {
     let dragging = false;
     let last = { x: 0, y: 0 };
 
+
     function applyTransform() {
-        content.style.transform = `translate(${translate.x}px, ${translate.y}px) scale(${scale})`;
+        content.style.transform = `translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px)) scale(${scale})`;
     }
 
     function toLocalCoords(evt) {
         const rect = wrapper.getBoundingClientRect();
         return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
     }
-
     function onWheel(e) {
         e.preventDefault();
         const delta = -e.deltaY; // wheel up -> zoom in
         const zoomFactor = Math.exp(delta * 0.0015);
         // Choose reference point: mouse position or center, based on preview modal setting
-        const previewModal = document.getElementById('previewModal');
-        const zoomMode = (previewModal && previewModal.dataset.zoomMode) ? previewModal.dataset.zoomMode : 'mouse';
-        const mouse = (zoomMode === 'center') ? ({ x: wrapper.clientWidth / 2, y: wrapper.clientHeight / 2 }) : toLocalCoords(e);
+        const mouse = toLocalCoords(e);
 
         const s2 = Math.max(0.2, Math.min(6, scale * zoomFactor));
         // keep the point under cursor stationary
         const t = translate;
-        const newTx = t.x + (1 - s2 / scale) * (mouse.x - t.x);
-        const newTy = t.y + (1 - s2 / scale) * (mouse.y - t.y);
+        const newTx = t.x + (1 - s2 / scale) * (mouse.x - wrapper.offsetWidth / 2 - t.x);
+        const newTy = t.y + (1 - s2 / scale) * (mouse.y - wrapper.offsetHeight / 2 - t.y);
         scale = s2;
         translate.x = newTx;
         translate.y = newTy;
