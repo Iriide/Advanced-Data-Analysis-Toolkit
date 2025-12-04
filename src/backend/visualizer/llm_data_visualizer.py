@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Optional, Tuple
 from matplotlib.axes import Axes
+import textwrap
 
 from backend.visualizer.services.db_inspector import DBInspector
 from backend.visualizer.services.llm_client import LLMClient
@@ -84,7 +85,8 @@ class LLMDataVisualizer:
     # --- PROMPT GENERATION ---
 
     def _construct_sql_prompt(self, question: str, schema: str) -> str:
-        return f"""
+        return textwrap.dedent(
+            f"""
         ```db-schema
         {schema}
         ```
@@ -103,43 +105,36 @@ class LLMDataVisualizer:
         Please return ONLY the SQL query as plain text,
         without any additional explanations or formatting.
         """
+        )
 
     def _construct_plot_prompt(self, question: str, df: pd.DataFrame) -> str:
-        return f"""
-        ```df-plot-parameters
-        {self._plot_parameters_txt}
-        ```
-
-        ```df-columns
-        {df.columns.tolist()}
-        ```
-
-        ```df-index
-        {df.index}
-        ```
-
-        ```df-head
-        {df.head().to_string()}
+        return textwrap.dedent(
+            f"""
+        ```df-metadata
+        Columns: {df.columns.tolist()}
+        Index: {df.index.tolist()}
+        Head: {df.head().to_dict()}
         ```
 
         **Question**: {question}
 
         # Instructions
 
-        Hello, knowing the data and the question,
-        prepare me parameters dictionary (json)
-        that will used for df.plot() as kwargs.
-        Only use parameters from the df-plot-parameters that are relevant.
+        Based on the provided data and question, generate a JSON dictionary
+        with parameters for `df.plot()` that are relevant and appropriate.
+        Ensure the plot is clear, informative, and visually appealing.
+        Consider using advanced plot types (e.g., stacked plots, subplots)
+        if the data has multiple columns.
 
-        The plot needs to be nice and informative.
-        If there is more than one column, the plot may be complex
-        (e.g. stacked plots, subplots, etc).
+        The JSON dictionary should include:
+        - Parameters for `df.plot()` as flat key-value pairs.
+        - A `should_plot` key with a boolean value indicating whether
+          plotting is suitable for this data.
 
-        Please provide ONLY the flat json, nothing else.
-
-        Additionally, add a 'should_plot' key with boolean value
-        indicating whether plotting is appropriate for this data.
+        Return ONLY the JSON dictionary as plain text,
+        without any additional explanations.
         """
+        )
 
     # --- PUBLIC API ---
 
