@@ -1,3 +1,4 @@
+import numpy as np
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Any, Iterable, Dict, AsyncGenerator
@@ -317,7 +318,7 @@ def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
             columns = []
         else:
             df2 = df.reset_index()
-            records = df2.to_dict(orient="records")
+            records = df2.replace({np.nan: None}).to_dict(orient="records")
             columns = df2.columns.tolist()
 
         return JSONResponse(

@@ -119,6 +119,9 @@ async function initTopRow() {
         window.describeData = rows;
         window.describeColumns = header_col;
 
+        // Make the describe table interactive (filter + sort)
+        try { makeTableInteractive(table1); } catch (e) { console.warn('Could not attach table controls', e); }
+
         table1.dataset.previewTitle = 'DB Description';
         table1.classList.add('loaded');
     } catch (err) {
@@ -183,6 +186,7 @@ function showPreview(title, src) {
     titleEl.innerText = title;
     // Clear body
     bodyEl.innerHTML = '';
+    try { bodyEl.style.cursor = 'default'; } catch (e) { }
     // Determine if content is SVG by checking content-type or URL
     const contentType = (bodyEl.dataset.contentType || '') || (document.getElementById('resultImage')?.dataset.contentType || '');
     const isSvg = (typeof contentType === 'string' && contentType.includes('svg')) || (typeof src === 'string' && src.startsWith('data:image/svg+xml')) || (typeof src === 'string' && src.endsWith('.svg'));
@@ -238,6 +242,8 @@ function showPreview(title, src) {
     }
 
     // enable pan & zoom
+    // indicate this preview allows grabbing/panning
+    try { bodyEl.style.cursor = 'grab'; } catch (e) { }
     enablePanAndZoom(bodyEl, contentEl);
 }
 
@@ -247,14 +253,30 @@ function showPreviewHtml(title, html) {
     const titleEl = document.getElementById('previewModalTitle');
     const bodyEl = document.getElementById('previewModalBody');
     if (!modalEl || !bodyEl || !titleEl) return;
+    // if a previous pan/zoom session is active (image preview), clean it up so
+    // HTML previews do not inherit any event listeners or grabbing cursor state.
+    try { if (_panZoomCleanup) { _panZoomCleanup(); } } catch (e) { }
+    _panZoomCleanup = null;
     titleEl.innerText = title;
     bodyEl.innerHTML = '';
     const wrapper = document.createElement('div');
     wrapper.style.width = '100%';
     wrapper.style.height = '100%';
     wrapper.style.overflow = 'auto';
+        // indicate this preview allows grabbing/panning and show recenter control
+        try { bodyEl.style.cursor = 'grab'; } catch (e) { }
+        try { const rc = document.getElementById('recenterPreviewBtn'); if (rc) rc.style.display = ''; } catch (e) { }
+    // Ensure table/html previews use default cursor and normal selection behaviour
+    wrapper.style.cursor = 'default';
+    wrapper.style.userSelect = 'text';
     wrapper.innerHTML = html;
     bodyEl.appendChild(wrapper);
+    // If the HTML contains a table, make it interactive (enable sorting/filtering)
+    try {
+        makeTableInteractive(wrapper);
+    } catch (e) {
+        console.warn('Could not attach table controls to preview modal:', e);
+    }
 
     try {
         if (window.bootstrap && bootstrap.Modal && typeof bootstrap.Modal.getOrCreateInstance === 'function') {
@@ -273,6 +295,8 @@ function showPreviewHtml(title, html) {
     } catch (err) {
         console.error('Failed to show preview modal:', err);
     }
+    // hide recenter/pan control for HTML previews (table mode)
+    try { const rc = document.getElementById('recenterPreviewBtn'); if (rc) rc.style.display = 'none'; } catch (e) { }
 }
 
 
@@ -510,7 +534,9 @@ function handleSend() {
     statusText.innerText = 'Sending request...';
     // disable result header controls while loading / until a result is available
     try { setResultControlsEnabled(false); } catch (e) { }
+    // show loader and start rotation animation
     resultLoader.style.display = 'block';
+    try { resultLoader.classList.add('show'); } catch (e) { }
     resultImg.classList.remove('loaded');
     outputBadge.className = 'badge bg-warning bg-opacity-10 text-warning status-badge';
     outputBadge.innerText = 'Processing';
@@ -551,6 +577,8 @@ function handleSend() {
             else resultImg.dataset.contentType = 'image/png';
 
             resultImg.onload = () => {
+                // hide loader and stop rotation animation
+                try { resultLoader.classList.remove('show'); } catch (e) { }
                 resultLoader.style.display = 'none';
                 resultImg.classList.add('loaded');
                 attachPreviewHandlers();
@@ -566,6 +594,8 @@ function handleSend() {
                     container.onclick = () => {
                         showPreviewHtml('Result Table', renderResultTableHtml(resultTable));
                     };
+                    // enhance result table with filter + sorting
+                    try { makeTableInteractive(container); } catch (e) { console.warn('Could not attach table controls to result table', e); }
                 }
             } catch (e) {
                 console.warn('Failed to render result table:', e);
@@ -579,6 +609,7 @@ function handleSend() {
                 const initialView = shouldPlot && imageUrl ? 'image' : hasTable ? 'table' : 'image';
                 if (initialView === 'table') {
                     // if showing table, hide image loader immediately
+                    try { resultLoader.classList.remove('show'); } catch (e) { }
                     try { resultLoader.style.display = 'none'; } catch (e) { }
                 }
                 setResultView(initialView);
@@ -792,6 +823,176 @@ function renderResultTableHtml(dfObj) {
 
 function escapeHtml(s) {
     return s.replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&apos', '"': '&quot' }[c]));
+}
+
+// Make a rendered HTML table interactive: clickable headers for three-state sorting (unsorted -> asc -> desc -> unsorted).
+function makeTableInteractive(container) {
+    if (!container) return;
+    const table = container.querySelector('table');
+    if (!table) return;
+
+    // If this is the result table, do not attach sorting controls.
+    // The describe table (top-row) keeps interactive sorting, but result
+    // tables should remain static as requested by the UX requirements.
+    const isResultTable = container.id === 'resultTableContainer';
+
+    if (container.__interactiveAttached) return;
+    container.__interactiveAttached = true;
+
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if (!thead || !tbody) return;
+
+    const headers = Array.from(thead.querySelectorAll('th'));
+
+    // preserve original HTML so we can restore the multirow/index styling when unsorted
+    const originalTbodyHtml = tbody.innerHTML;
+
+    // Detect if this is the describe table with structured data available
+    const isDescribeTable = (container.id === 'table1' && Array.isArray(window.describeData) && Array.isArray(window.describeColumns));
+
+    // Build a canonical rows array for sorting purposes.
+    // For describe tables we keep the original row objects so we can re-render
+    // them with the same formatting (italics, dtype colorization) when sorted.
+    let originalRowsData = [];
+    let describeCols = null;
+    if (isDescribeTable) {
+        describeCols = window.describeColumns.slice();
+        originalRowsData = window.describeData.map(r => r);
+    } else {
+        // Fallback: derive rows from DOM; ensure each row is represented as an array of cell texts
+        originalRowsData = Array.from(tbody.querySelectorAll('tr')).map(tr => {
+            const cells = Array.from(tr.querySelectorAll('th,td'));
+            return cells.map(c => c.innerText.trim());
+        });
+    }
+
+    // currentRows holds the currently-displayed ordering (array of arrays)
+    let currentRows = originalRowsData.slice();
+
+    // helper to render rows (used when sorted). When unsorted we restore original HTML to preserve rowspan.
+    function renderSortedRows(rowsArr) {
+        if (isDescribeTable) {
+            // Render rows from objects using describeCols to preserve formatting
+            tbody.innerHTML = rowsArr.map(rowObj => {
+                return `<tr>${describeCols.map((colName, idx) => {
+                    const raw = rowObj[colName];
+                    const val = raw === null || raw === undefined ? '' : raw;
+                    // first two columns used to be rendered as <th> in the original describe table
+                    const cellTag = (idx === 0 || idx === 1) ? 'th' : 'td';
+                    const inner = formatDescribeCell(val, colName, idx === 0 || idx === 1);
+                    return `<${cellTag} style="border: 1px solid #dee2e6; padding: 8px;">${inner}</${cellTag}>`;
+                }).join('')}</tr>`;
+            }).join('');
+            return;
+        }
+        tbody.innerHTML = rowsArr.map(r => `<tr>${r.map(c => `<td style="border: 1px solid #dee2e6; padding: 8px;">${escapeHtml(String(c || ''))}</td>`).join('')}</tr>`).join('');
+    }
+
+    // Helper to format describe table cells (imitates renderValue/applyIndexStyle used when initially building the table)
+    function colorizeDtype(dtype) {
+        const type = String(dtype || '').toLowerCase();
+        if (type.includes('int') || type.includes('numeric'))
+            return `<span title="Numeric columns" style="color: green;">${escapeHtml(String(dtype))}</span>`;
+        else if (type.includes('bool'))
+            return `<span title="Boolean columns" style="color: orange;">${escapeHtml(String(dtype))}</span>`;
+        else if (type.includes('char'))
+            return `<span title="Character columns" style="color: blue;">${escapeHtml(String(dtype))}</span>`;
+        else if (type.includes('datetime'))
+            return `<span title="Date and Time columns" style="color: purple;">${escapeHtml(String(dtype))}</span>`;
+        return `<span title="Other columns">${escapeHtml(String(dtype))}</span>`;
+    }
+
+    function formatDescribeCell(value, colName, isIndexCol) {
+        if (value === null || value === undefined || value === '') {
+            return '<span style="opacity: 0.25;">N/A</span>';
+        }
+        // numeric formatting
+        if (!isNaN(value) && !isNaN(parseFloat(value))) {
+            try { return parseFloat(value).toFixed(2); } catch (e) { /* fallthrough */ }
+        }
+        const s = String(value).trim();
+        const lower = String(colName || '').toLowerCase();
+        if (lower === 'dtype') return colorizeDtype(s);
+        if (lower.includes('table') || lower.includes('column') || isIndexCol) return `<i>${escapeHtml(s)}</i>`;
+        return escapeHtml(s);
+    }
+
+    // If this is the result table, do not attach any sorting UI or handlers.
+    if (isResultTable) {
+        // keep function idempotent but avoid adding sort indicators or click handlers
+        return;
+    }
+
+    // set up sortable headers: three-state cycle (unsorted -> asc -> desc -> unsorted)
+    headers.forEach((th, colIdx) => {
+        th.style.cursor = 'pointer';
+        const indicator = document.createElement('span');
+        indicator.className = 'sort-indicator';
+        // Reserve a fixed width for the indicator so showing/hiding the
+        // triangle does not cause the table layout to reflow.
+        indicator.style.display = 'inline-block';
+        indicator.style.width = '1.1em';
+        indicator.style.marginLeft = '6px';
+        indicator.style.fontSize = '0.85em';
+        indicator.style.textAlign = 'center';
+        // Use a non-breaking space as the empty state so the span keeps width
+        indicator.innerText = '\u00A0';
+        th.appendChild(indicator);
+
+        th.addEventListener('click', () => {
+            // determine current state
+            const cur = th.dataset.sort === 'asc' ? 'asc' : (th.dataset.sort === 'desc' ? 'desc' : null);
+            // clear other headers (leave a NBSP so width is preserved)
+            headers.forEach(h => { if (h !== th) { delete h.dataset.sort; const si = h.querySelector('.sort-indicator'); if (si) si.innerText = '\u00A0'; } });
+
+            // compute next state
+            let next = null;
+            if (cur === null) next = 'asc';
+            else if (cur === 'asc') next = 'desc';
+            else next = null; // desc -> unsorted
+
+            if (next) th.dataset.sort = next; else delete th.dataset.sort;
+            const si = th.querySelector('.sort-indicator'); if (si) si.innerText = next === 'asc' ? '▲' : (next === 'desc' ? '▼' : '\u00A0');
+
+            if (!next) {
+                // restore unsorted original HTML (preserves rowspan/index for describe table)
+                try { tbody.innerHTML = originalTbodyHtml; } catch (e) { tbody.innerHTML = ''; }
+                currentRows = originalRowsData.slice();
+                return;
+            }
+
+            // perform sort on a copy of originalRowsData to avoid multi-click mutation issues
+            const rowsToSort = originalRowsData.slice();
+            rowsToSort.sort((a, b) => {
+                // extract comparable values depending on table type
+                let va, vb;
+                if (isDescribeTable) {
+                    const colName = describeCols[colIdx];
+                    va = a[colName];
+                    vb = b[colName];
+                } else {
+                    va = a[colIdx];
+                    vb = b[colIdx];
+                }
+                va = va === undefined || va === null ? '' : va;
+                vb = vb === undefined || vb === null ? '' : vb;
+                // numeric compare if both look numeric
+                const na = parseFloat(String(va).replace(/[^0-9eE+\\-\\.]/g, ''));
+                const nb = parseFloat(String(vb).replace(/[^0-9eE+\\-\\.]/g, ''));
+                if (!isNaN(na) && !isNaN(nb)) {
+                    return next === 'asc' ? na - nb : nb - na;
+                }
+                const sa = String(va).toLowerCase();
+                const sb = String(vb).toLowerCase();
+                if (sa < sb) return next === 'asc' ? -1 : 1;
+                if (sa > sb) return next === 'asc' ? 1 : -1;
+                return 0;
+            });
+            currentRows = rowsToSort;
+            renderSortedRows(rowsToSort);
+        });
+    });
 }
 
 // attach toggle handler after DOM ready
