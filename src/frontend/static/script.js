@@ -631,6 +631,7 @@ function handleSend() {
             statusText.innerText = `Error: ${message}`;
             outputBadge.className = 'badge bg-danger status-badge';
             outputBadge.innerText = 'Error';
+            resultLoader.classList.remove('show');
         });
 }
 

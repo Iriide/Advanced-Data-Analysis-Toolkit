@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, Any, Iterable, Dict, AsyncGenerator
 import uuid
 import logging
+import textwrap
 
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import asynccontextmanager
@@ -157,10 +158,9 @@ def fig_to_bytes(fig: Any, fmt: str = "png") -> bytes:
         fmt = (fmt or "png").lower()
         if fmt not in ("png", "svg", "pdf"):
             fmt = "png"
-        # bbox_inches for raster formats; for vector formats leave default
-        save_kwargs = {"format": fmt}
-        if fmt == "png":
-            save_kwargs["bbox_inches"] = "tight"
+        # Use tight bbox for all formats to avoid clipped labels/ticks in saved images.
+        # A small pad keeps things from being too cramped.
+        save_kwargs = {"format": fmt, "bbox_inches": "tight", "pad_inches": 0.05}
 
         fig.savefig(buf, **save_kwargs)
         buf.seek(0)
@@ -344,20 +344,31 @@ def random_questions(count: int = 10) -> JSONResponse:
     viz = get_viz()
     try:
         schema = viz.export_schema()
-        prompt = f"""
+        prompt = textwrap.dedent(
+            f"""
         You are a data analyst assistant.
-        Given the following database schema, generate {count} concise,
-        diverse and interesting natural-language questions
-        that could be asked about the data.
-        The questions should utilize joining multiple tables
-        and ask the questions that the answer could be plotted nicely.
-        Number each question and provide them as plain text lines. Do NOT produce SQL.
+        Based on the following database schema, generate {count} concise,
+        diverse, and visually interesting natural-language questions
+        that can be answered with data visualizations. Ensure the questions
+        involve joining multiple tables where applicable and focus on generating
+        plots that are clear and easy to interpret.
+
+        Limit the data (the predicted row count) in the questions
+        to ensure the visualizations are not overcrowded.
+        For example, restrict the results to the top 5 or 10 items, or use filters
+        to focus on specific subsets of the data.
+
+        Avoid questions that require too much information to be displayed
+        in a single plot, as the goal is to create readable and visually appealing
+        visualizations.
 
         Schema:
         {schema}
 
-        Provide exactly {count} questions if possible, each on its own line.
+        Provide exactly {count} questions, each on its own line, numbered sequentially.
+        Do NOT produce SQL or overly complex queries.
         """
+        )
 
         raw = viz._llm_client.generate_content(prompt, retries=3)
         # basic cleanup: strip fences and split lines
