@@ -1,16 +1,25 @@
 import argparse
+import io
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 from pathlib import Path
+from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
+from backend.server.api import DummyServer
+from backend.visualizer.services.logger import configure_logging, get_logger
 
-# Import the orchestrator
-from visualizer.llm_data_visualizer import LLMDataVisualizer
-from server.api import DummyServer
-from core.logger import configure_logging, get_logger
-import logging
+logger: logging.Logger
+
+SAMPLE_QUESTIONS = [
+    "Give me a count of employees grouped by age?",
+    "What are the top 10 most used genres?",
+    "Which genre generated the highest revenue?",
+    "What are the revenues and the number of tracks sold for each genre?",
+]
 
 
-def main() -> None:
+def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="LLM Data Visualizer Driver")
     parser.add_argument(
         "--mode",
@@ -40,7 +49,6 @@ def main() -> None:
         action="store_true",
         help="Describe (i.e. summarize) the database. Does not apply in server mode.",
     )
-
     parser.add_argument(
         "-v",
         "--verbose",
@@ -54,80 +62,108 @@ def main() -> None:
         default=None,
         help="Optional path to write logs to a file.",
     )
-    args = parser.parse_args()
+    return parser
 
-    # Map verbosity count to logging level:
-    # 0 (default) -> INFO (useful default for CLI),
-    # 1 (-v) -> DEBUG (developer level)
-    # 2+ (-vv) -> DEBUG with more verbosity enabled by downstream modules if needed
-    if hasattr(args, "verbose"):
-        if args.verbose == 0:
-            level = logging.INFO
-        else:
-            level = logging.DEBUG
-    else:
-        level = logging.INFO
 
-    # Allow explicit override via env var LOG_LEVEL
-    configure_logging(level=level, log_file=args.log_file)
+def parse_arguments() -> argparse.Namespace:
+    return create_argument_parser().parse_args()
+
+
+def determine_logging_level(arguments: argparse.Namespace) -> int:
+    if hasattr(arguments, "verbose") and arguments.verbose > 0:
+        return logging.DEBUG
+    return logging.INFO
+
+
+def initialize_logging(arguments: argparse.Namespace) -> None:
+    global logger
+    logging_level = determine_logging_level(arguments)
+    configure_logging(level=logging_level, log_file=arguments.log_file)
     logger = get_logger(__name__)
 
-    if args.mode == "server":
-        logger.info("--- Starting Server ---")
-        try:
-            server = DummyServer()
-            server.start()
-        except KeyboardInterrupt:
-            logger.info("Server stopped by user.")
+
+def run_server() -> None:
+    logger.info("--- Starting Server ---")
+    try:
+        server = DummyServer()
+        server.start()
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user.")
+    return
+
+
+def validate_database_path(arguments: argparse.Namespace) -> Path:
+    database_path = Path(arguments.db_path)
+    if not database_path.exists():
+        raise FileNotFoundError(f"Database not found at {database_path}")
+    return database_path
+
+
+def convert_svg_to_image(svg_path: Path) -> Image.Image:
+    import cairosvg
+
+    png_bytes = cairosvg.svg2png(url=str(svg_path), scale=2)
+    return Image.open(io.BytesIO(png_bytes))
+
+
+def display_image(image: Image.Image) -> None:
+    plt.imshow(image)
+    plt.axis("off")
+    plt.show()
+
+
+def generate_and_display_schema(visualizer: LLMDataVisualizer) -> None:
+    logger.info("--- Generating Schema Plot ---")
+    schema_path = visualizer.plot_schema()
+    if not schema_path:
         return
 
-    # CLI Mode
-    db_path = Path(args.db_path)
-    if not db_path.exists():
-        logger.error("Database not found at %s", db_path)
+    logger.info("Schema saved to: %s", schema_path)
+    image = convert_svg_to_image(schema_path)
+    display_image(image)
+
+
+def select_question(question: str) -> str:
+    if question == "random":
+        selected: str = np.random.choice(SAMPLE_QUESTIONS)
+        print(f"Using random sample: '{selected}'")
+        return selected
+    return question
+
+
+def analyze_question(question: str, visualizer: LLMDataVisualizer) -> None:
+    selected_question = select_question(question)
+    logger.info("\n--- Analyzing: %s ---", selected_question)
+    visualizer.question_to_plot(selected_question, show=True)
+
+
+def display_database_description(visualizer: LLMDataVisualizer) -> None:
+    logger.info("\n--- Database Description ---")
+    description_dataframe = visualizer.describe_database()
+    logger.info("\n%s", description_dataframe.to_markdown())
+
+
+def run_cli_mode(arguments: argparse.Namespace) -> None:
+    database_path = validate_database_path(arguments)
+    visualizer = LLMDataVisualizer(database_path=database_path)
+
+    if arguments.plot_schema:
+        generate_and_display_schema(visualizer)
+    if arguments.question:
+        analyze_question(arguments.question, visualizer)
+    if arguments.describe:
+        display_database_description(visualizer)
+
+
+def main() -> None:
+    arguments = parse_arguments()
+    initialize_logging(arguments)
+
+    if arguments.mode == "server":
+        run_server()
         return
-    visualizer = LLMDataVisualizer(db_path=db_path)
 
-    # 1. Schema Plot
-    if args.plot_schema:
-        logger.info("--- Generating Schema Plot ---")
-        schema_path = visualizer.plot_schema()
-        if schema_path:
-            logger.info("Schema saved to: %s", schema_path)
-            try:
-                import cairosvg
-                from PIL import Image
-                import io
-
-                png_bytes = cairosvg.svg2png(url=str(schema_path), scale=2)
-                image = Image.open(io.BytesIO(png_bytes))
-                plt.imshow(image)
-                plt.axis("off")
-                plt.show()
-            except ImportError:
-                logger.warning("Cairosvg/PIL not installed, skipping schema display.")
-
-    # 2. Question Processing
-    if args.question:
-        q = args.question
-        if q == "random":
-            sample_questions = [
-                "Give me a count of employees grouped by age?",
-                "What are the top 10 most used genres?",
-                "Which genre generated the highest revenue?",
-                "What are the revenues and the number of tracks sold for each genre?",
-            ]
-            q = np.random.choice(sample_questions)
-            print(f"No question provided. Using random sample: '{q}'")
-
-        logger.info("\n--- Analyzing: %s ---", q)
-        visualizer.question_to_plot(q, show=True)
-
-    # 3. Database Description
-    if args.describe:
-        logger.info("\n--- Database Description ---")
-        description_df = visualizer.describe_database()
-        logger.info("\n%s", description_df.to_markdown())
+    run_cli_mode(arguments)
 
 
 if __name__ == "__main__":

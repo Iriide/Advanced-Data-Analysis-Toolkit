@@ -1,4 +1,4 @@
-from core.llm_client import LLMClient
+from backend.visualizer.services.llm_client import LLMClient
 from unittest.mock import MagicMock
 
 

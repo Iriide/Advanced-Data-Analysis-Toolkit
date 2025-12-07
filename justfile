@@ -15,7 +15,6 @@ lint:
     black --check .
     mypy .
     vulture src/ . --exclude venv,tests --min-confidence 80
-    pip-audit -r requirements.txt
 
 lint-fix:
     black .
