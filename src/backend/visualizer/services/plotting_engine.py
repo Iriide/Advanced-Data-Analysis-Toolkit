@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, cast
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.table import Table, Cell
@@ -162,10 +162,10 @@ class PlottingEngine:
         if hasattr(axes, "__iter__") and not isinstance(axes, Axes):
             for item in axes:
                 if hasattr(item, "get_figure"):
-                    return item.get_figure()
+                    return cast(Figure, item.get_figure())
             return plt.gcf()
         if hasattr(axes, "get_figure"):
-            return axes.get_figure()
+            return cast(Figure, axes.get_figure())
         return plt.gcf()
 
     def _close_figure(self, axes: Any) -> None:
