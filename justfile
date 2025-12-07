@@ -8,14 +8,15 @@ fetch-chinook:
 
 
 lint:
-    ruff check .
-    black --check .
-    mypy . --strict --pretty
-    vulture src/ . --exclude venv,tests --min-confidence 80
+    uv run ruff check .
+    uv run black --check .
+    uv run mypy . --strict --pretty
+    uv run vulture src/ . --exclude venv,tests --min-confidence 80
+    uv run pip-audit
 
 lint-fix:
-    black .
-    ruff check --fix .
+    uv run black .
+    uv run ruff check --fix .
 
 test *args:
     pytest {{args}}
