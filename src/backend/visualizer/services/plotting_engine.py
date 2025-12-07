@@ -23,15 +23,15 @@ class PlottingEngine:
 
     @staticmethod
     def _calculate_column_widths(dataframe: pd.DataFrame) -> list[int]:
-        column_widths = []
-        for column in dataframe.columns:
+        column_widths: list[int] = [0] * len(dataframe.columns)
+        for i, column in enumerate(dataframe.columns):
             maximum_data_length = (
                 dataframe[column].astype(str).map(len).max()
                 if not dataframe[column].empty
                 else 0
             )
             header_length = len(str(column))
-            column_widths.append(max(maximum_data_length, header_length) + CELL_PADDING)
+            column_widths[i] = max(maximum_data_length, header_length) + CELL_PADDING
         return column_widths
 
     @staticmethod

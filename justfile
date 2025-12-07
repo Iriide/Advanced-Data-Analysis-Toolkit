@@ -1,5 +1,3 @@
-
-
 fetch-chinook:
     @echo "Fetching Chinook sample database..."
     curl https://www.sqlitetutorial.net/wp-content/uploads/2018/03/chinook.zip --output chinook.db.zip
@@ -9,11 +7,10 @@ fetch-chinook:
     mv chinook.db data/chinook.db
 
 
-# Run all linters: Ruff, Black (check), Mypy
 lint:
     ruff check .
     black --check .
-    mypy .
+    mypy . --strict --pretty
     vulture src/ . --exclude venv,tests --min-confidence 80
 
 lint-fix:
