@@ -2,7 +2,7 @@ import sqlite3
 import json
 from pathlib import Path
 import pandas as pd
-from visualizer.llm_data_visualizer import LLMDataVisualizer
+from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 
 
 def create_test_db(path: Path) -> None:
