@@ -4,10 +4,9 @@ import tempfile
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from sqlalchemy import create_engine, MetaData, Engine
 from sqlalchemy_schemadisplay import create_schema_graph
-from pydot import Dot
 
 NUMERIC_DATA_TYPES = ("INTEGER", "REAL", "NUMERIC", "FLOAT", "DOUBLE")
 
@@ -40,7 +39,7 @@ class DatabaseInspector:
 
     def _get_numeric_column_statistics(
         self, cursor: sqlite3.Cursor, table_name: str, column_name: str
-    ) -> dict:
+    ) -> dict[str, Optional[float]]:
         query = f"""
             SELECT COUNT([{column_name}]), MIN([{column_name}]), AVG([{column_name}]), MAX([{column_name}])
             FROM {table_name};
@@ -58,7 +57,7 @@ class DatabaseInspector:
 
     def _get_categorical_column_statistics(
         self, cursor: sqlite3.Cursor, table_name: str, column_name: str
-    ) -> dict:
+    ) -> dict[str, Optional[float]]:
         query = f"""
             SELECT COUNT([{column_name}]), COUNT(DISTINCT [{column_name}]),
             (SELECT [{column_name}] FROM {table_name} GROUP BY [{column_name}] ORDER BY COUNT(*) DESC LIMIT 1),
@@ -78,7 +77,7 @@ class DatabaseInspector:
 
     def _get_column_statistics(
         self, cursor: sqlite3.Cursor, table_name: str, column_name: str, data_type: str
-    ) -> dict:
+    ) -> dict[str, Optional[float]]:
         if data_type.upper() in NUMERIC_DATA_TYPES:
             return self._get_numeric_column_statistics(cursor, table_name, column_name)
         return self._get_categorical_column_statistics(cursor, table_name, column_name)
@@ -137,14 +136,14 @@ class DatabaseInspector:
         connection.close()
         return "\n".join(schema_statements)
 
-    def _configure_schema_graph_nodes(self, graph: Dot) -> None:
+    def _configure_schema_graph_nodes(self, graph: Any) -> None:
         for node in graph.get_nodes():
             node.set_color("#1f77b4")
             node.set_penwidth("1.5")
         graph.set_splines("ortho")
         graph.set_bgcolor("#ffffff")
 
-    def _create_schema_graph(self, engine: Engine, metadata: MetaData) -> Dot:
+    def _create_schema_graph(self, engine: Engine, metadata: MetaData) -> Any:
         graph = create_schema_graph(
             engine=engine,
             metadata=metadata,
@@ -179,6 +178,8 @@ class DatabaseInspector:
             Path: Path to the generated SVG temporary file,
             or None if dependencies missing.
         """
+        if not self._connection_string:
+            raise ValueError("Connection string cannot be None")
         engine = create_engine(self._connection_string)
         metadata = MetaData()
         metadata.reflect(bind=engine)

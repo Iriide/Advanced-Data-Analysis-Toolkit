@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional
+from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-from matplotlib.table import Table
+from matplotlib.table import Table, Cell
 from backend.visualizer.services.logger import get_logger
 
 logger = get_logger(__name__)
@@ -35,13 +36,13 @@ class PlottingEngine:
         return column_widths
 
     @staticmethod
-    def _style_header_cell(cell: Table.Cell) -> None:
+    def _style_header_cell(cell: Cell) -> None:
         cell.set_text_props(weight="bold", color="white")
         cell.set_facecolor(HEADER_BACKGROUND_COLOR)
         cell.set_edgecolor("white")
 
     @staticmethod
-    def _style_data_cell(cell: Table.Cell, row_index: int) -> None:
+    def _style_data_cell(cell: Cell, row_index: int) -> None:
         cell.set_edgecolor(CELL_EDGE_COLOR)
         if row_index % 2 == 0:
             cell.set_facecolor(ALTERNATE_ROW_COLOR)
@@ -85,7 +86,7 @@ class PlottingEngine:
         return figure_width, figure_height
 
     @staticmethod
-    def _render_dataframe_as_table(dataframe: pd.DataFrame) -> Tuple[plt.Figure, Axes]:
+    def _render_dataframe_as_table(dataframe: pd.DataFrame) -> Tuple[Figure, Axes]:
         column_widths = PlottingEngine._calculate_column_widths(dataframe)
         total_characters = sum(column_widths)
         relative_widths = [width / total_characters for width in column_widths]
@@ -157,7 +158,7 @@ class PlottingEngine:
 
         return axes, should_plot
 
-    def _extract_figure_from_axes(self, axes: Any) -> Optional[plt.Figure]:
+    def _extract_figure_from_axes(self, axes: Any) -> Optional[Figure]:
         if hasattr(axes, "__iter__") and not isinstance(axes, Axes):
             for item in axes:
                 if hasattr(item, "get_figure"):

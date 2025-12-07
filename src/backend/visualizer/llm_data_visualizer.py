@@ -3,7 +3,7 @@ import re
 import argparse
 import pandas as pd
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from matplotlib.axes import Axes
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
@@ -175,7 +175,7 @@ class LLMDataVisualizer:
         raw_response = self._llm_client.generate_content(prompt, retry_count)
         return self._llm_client.clean_markdown_block(raw_response, "json")
 
-    def _parse_plot_parameters(self, json_string: str) -> Tuple[dict, bool]:
+    def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
         try:
             parameters = json.loads(json_string)
             should_plot = parameters.pop("should_plot", False)
