@@ -19,7 +19,7 @@ lint-fix:
     uv run ruff check --fix .
 
 test *args:
-    pytest {{args}}
+    uv run pytest {{args}}
 
 coverage:
-    coverage report --fail-under=10
+    uv run coverage report --fail-under=10
