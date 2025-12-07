@@ -22,7 +22,7 @@ def test_generate_content_monkeypatch(monkeypatch):
     )
 
     # 3. Now initialize your wrapper (it will use the FakeGenAIClient)
-    client = LLMClient(load_env=False)
+    client = LLMClient(load_environment=False)
 
     # 4. Run your test
     response = client.generate_content("Hello")
