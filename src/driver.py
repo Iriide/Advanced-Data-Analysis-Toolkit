@@ -1,14 +1,20 @@
 import argparse
 import io
+import os
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+import uvicorn
+import cairosvg
+import subprocess
+import threading
+from time import sleep
 from PIL import Image
 from pathlib import Path
-
-# Import the orchestrator
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 from backend.utils.logger import configure_logging, get_logger
+
+logger: logging.Logger
 
 SAMPLE_QUESTIONS = [
     "Give me a count of employees grouped by age?",
@@ -18,8 +24,54 @@ SAMPLE_QUESTIONS = [
 ]
 
 
+def parse_cli_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
+
+    parser.add_argument(
+        "--question",
+        type=str,
+        help="Question to analyze." + postfix,
+    )
+    parser.add_argument(
+        "--database-path",
+        type=str,
+        default="data/chinook.db",
+        help="Path to database." + postfix,
+    )
+    parser.add_argument(
+        "--plot-schema",
+        action="store_true",
+        help="Generate schema SVG." + postfix,
+    )
+    parser.add_argument(
+        "--describe",
+        action="store_true",
+        help="Describe (i.e. summarize) the database." + postfix,
+    )
+
+
+def parse_server_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Enable server reloading." + postfix,
+    )
+    parser.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="Open the server in a web browser after starting." + postfix,
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to run the server on." + postfix,
+    )
+
+
 def create_argument_parser() -> argparse.ArgumentParser:
+
     parser = argparse.ArgumentParser(description="LLM Data Visualizer Driver")
+
     parser.add_argument(
         "--mode",
         type=str,
@@ -28,32 +80,16 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Run mode: 'cli' for visualizer, 'server' to run the server.",
     )
     parser.add_argument(
-        "--question",
+        "--model",
         type=str,
-        help="Question to analyze. Does not apply in server mode.",
-    )
-    parser.add_argument(
-        "--db-path",
-        type=str,
-        default="data/chinook.db",
-        help="Path to database. Does not apply in server mode.",
-    )
-    parser.add_argument(
-        "--plot-schema",
-        action="store_true",
-        help="Generate schema SVG. Does not apply in server mode.",
-    )
-    parser.add_argument(
-        "--describe",
-        action="store_true",
-        help="Describe (i.e. summarize) the database. Does not apply in server mode.",
+        default="gemma-3-4b-it",
     )
     parser.add_argument(
         "-v",
-        "--verbose",
+        "--verbosity",
         action="count",
         default=0,
-        help="Increase verbosity (use -v, -vv for more verbose).",
+        help="Increase verbosity (use -v, -vv for more verbosity).",
     )
     parser.add_argument(
         "--log-file",
@@ -61,11 +97,11 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional path to write logs to a file.",
     )
-    parser.add_argument(
-        "--dev",
-        action="store_true",
-        help="Enable server reloading.",
-    )
+
+    parse_cli_arguments(parser, " (CLI mode only).")
+
+    parse_server_arguments(parser, " (Server mode only).")
+
     return parser
 
 
@@ -74,7 +110,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def determine_logging_level(arguments: argparse.Namespace) -> int:
-    if hasattr(arguments, "verbose") and arguments.verbose > 0:
+    if hasattr(arguments, "verbosity") and arguments.verbosity > 0:
         return logging.DEBUG
     return logging.INFO
 
@@ -86,29 +122,54 @@ def initialize_logging(arguments: argparse.Namespace) -> None:
     logger = get_logger(__name__)
 
 
-def run_server(arguments) -> None:
+def _open_browser(port: int, delay: int = 3) -> None:
+
+    if delay and delay > 0:
+        sleep(delay)  # Wait for the server to start
+    browser_opened = subprocess.call(
+        [
+            "python",
+            "-c",
+            f"import webbrowser; webbrowser.open('http://localhost:{port}')",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if browser_opened == 0:
+        logger.info(f"Opened web browser to http://localhost:{port}")
+    else:
+        logger.warning("Failed to open web browser automatically.")
+
+
+def run_server(arguments: argparse.Namespace) -> None:
     logger.info("--- Starting Server ---")
+
     try:
-        import uvicorn
+        if arguments.open_browser:
+            threading.Thread(target=_open_browser, args=(arguments.port,)).start()
+
+        os.environ["LLM_DATA_VISUALIZER_MODEL"] = arguments.model
 
         uvicorn.run(
-            "backend.server.api:app", host="0.0.0.0", port=8000, reload=arguments.dev
+            "backend.server.api:app",
+            host="0.0.0.0",
+            port=arguments.port,
+            reload=arguments.dev,
         )
+
     except KeyboardInterrupt:
         logger.info("Server stopped by user.")
     return
 
 
 def validate_database_path(arguments: argparse.Namespace) -> Path:
-    database_path = Path(arguments.db_path)
+    database_path = Path(arguments.database_path)
     if not database_path.exists():
         raise FileNotFoundError(f"Database not found at {database_path}")
     return database_path
 
 
 def convert_svg_to_image(svg_path: Path) -> Image.Image:
-    import cairosvg
-
     png_bytes = cairosvg.svg2png(url=str(svg_path), scale=2)
     return Image.open(io.BytesIO(png_bytes))
 
@@ -152,7 +213,10 @@ def display_database_description(visualizer: LLMDataVisualizer) -> None:
 
 def run_cli_mode(arguments: argparse.Namespace) -> None:
     database_path = validate_database_path(arguments)
-    visualizer = LLMDataVisualizer(database_path=database_path)
+    visualizer = LLMDataVisualizer(
+        database_path=database_path,
+        model=arguments.model,
+    )
 
     if arguments.plot_schema:
         generate_and_display_schema(visualizer)

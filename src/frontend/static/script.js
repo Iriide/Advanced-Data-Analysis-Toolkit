@@ -1024,8 +1024,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const pgPassword = document.getElementById('pgPassword').value;
 
         const payload = {
-            db_path: dbType === 'SQLITE' ? sqlitePath || 'data/chinook.db' : pgHost,
-            db_type: dbType === 'SQLITE' ? 'sqlite' : 'postgres',
+            database_path: dbType === 'SQLITE' ? sqlitePath || 'data/chinook.db' : pgHost,
+            database_type: dbType === 'SQLITE' ? 'sqlite' : 'postgres',
         };
 
         try {
@@ -1128,7 +1128,7 @@ function downloadDescribeCsv() {
         const csv = arrayToCsv(rows, cols);
         if (!csv) { alert('No describe data available'); return; }
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        downloadBlobObject(blob, 'db_description.csv');
+        downloadBlobObject(blob, 'database_description.csv');
     } catch (err) {
         console.error('Failed to download describe CSV', err);
         alert('Failed to download describe CSV: ' + (err.message || err));

@@ -11,7 +11,7 @@ except Exception:
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, cast
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.table import Table, Cell
@@ -26,6 +26,7 @@ MINIMUM_FIGURE_INCHES = 4
 HEADER_BACKGROUND_COLOR = "#40466e"
 ALTERNATE_ROW_COLOR = "#f5f5f5"
 CELL_EDGE_COLOR = "#dddddd"
+
 
 class PlottingEngine:
     """
@@ -140,7 +141,7 @@ class PlottingEngine:
             plot_params (Dict): Kwargs for df.plot().
             should_plot (bool): LLM recommendation on whether to plot.
             show (bool): Whether to call plt.show().
-            verbose (int): Verbosity level.
+            verbosity (int): Verbosity level.
 
         Returns:
             Tuple[Axes, bool]: The axes object and a boolean
@@ -167,7 +168,6 @@ class PlottingEngine:
                 "LLM recommended not to plot this result; showing table instead."
             )
         return axes, should_plot
-
 
     def _extract_figure_from_axes(self, axes: Any) -> Optional[Figure]:
         if hasattr(axes, "__iter__") and not isinstance(axes, Axes):

@@ -16,11 +16,11 @@ def create_test_db(path: Path) -> None:
     con.close()
 
 
-def test_db_inspector_execute_query_and_describe(tmp_path: Path):
-    db_path = tmp_path / "test.db"
-    create_test_db(db_path)
+def test_database_inspector_execute_query_and_describe(tmp_path: Path):
+    database_path = tmp_path / "test.db"
+    create_test_db(database_path)
 
-    inspector = DatabaseInspector(database_path=db_path, database_type="sqlite")
+    inspector = DatabaseInspector(database_path=database_path, database_type="sqlite")
     df = inspector.execute_query("SELECT * FROM people ORDER BY id;")
     assert isinstance(df, pd.DataFrame)
     assert df.shape[0] == 3

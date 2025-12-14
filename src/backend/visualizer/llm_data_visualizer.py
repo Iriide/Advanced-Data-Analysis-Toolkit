@@ -23,7 +23,7 @@ class LLMDataVisualizer:
         self,
         database_path: Path,
         database_type: str = "sqlite",
-        model: str = "gemini-2.5-flash-lite",
+        model: str = "gemma-3-4b-it",
         plot_parameters_file_path: Optional[Path] = None,
     ):
         self._database_path = database_path
@@ -100,6 +100,11 @@ class LLMDataVisualizer:
     def _construct_plot_prompt(self, question: str, dataframe: pd.DataFrame) -> str:
         return textwrap.dedent(
             f"""
+
+        ```df-plot-parameters
+        {self._plot_parameters_text}
+        ```
+
         ```df-metadata
         Columns: {dataframe.columns.tolist()}
         Index: {dataframe.index.tolist()}
@@ -129,7 +134,9 @@ class LLMDataVisualizer:
     def _log_sql_query(self, sql_query: str) -> None:
         if sql_query and len(sql_query) > SQL_QUERY_LOG_TRUNCATION_LENGTH:
             truncated = sql_query[:SQL_QUERY_LOG_TRUNCATION_LENGTH].replace("\n", " ")
-            logger.info("Generated SQL (truncated): %s...", truncated)
+            logger.info(
+                "Generated SQL (truncated): %s...\n", textwrap.indent(truncated, "  > ")
+            )
             logger.debug("Full generated SQL:\n%s", sql_query)
         else:
             logger.info("Generated SQL: %s", sql_query)
@@ -147,7 +154,7 @@ class LLMDataVisualizer:
         schema = self._database_inspector.export_schema()
         prompt = self._construct_sql_prompt(question, schema)
         raw_response = self._llm_client.generate_content(prompt, retry_count)
-        return self._llm_client.clean_markdown_block(raw_response, "sql")
+        return self._llm_client.clean_markdown_block(raw_response, "sql(ite)?")
 
     def _execute_sql_query(self, sql_query: str) -> pd.DataFrame:
         dataframe = self._database_inspector.execute_query(sql_query)
@@ -163,9 +170,21 @@ class LLMDataVisualizer:
         self, question: str, retry_count: int = 3
     ) -> pd.DataFrame:
         """Generates and executes a SQL query based on the user's question."""
-        sql_query = self._generate_sql_query(question, retry_count)
-        self._log_sql_query(sql_query)
-        return self._execute_sql_query(sql_query)
+        for attempt in range(retry_count, 0, -1):
+            try:
+                sql_query = self._generate_sql_query(question, retry_count)
+                self._log_sql_query(sql_query)
+                return self._execute_sql_query(sql_query)
+            except pd.errors.DatabaseError as e:
+                logger.error("SQL execution error: %s", e)
+                if attempt == 1:
+                    logger.error("All retries exhausted. Returning empty DataFrame.")
+                    raise e
+                logger.info(
+                    "Retrying SQL generation and execution (%d retries left)...",
+                    attempt - 1,
+                )
+        raise RuntimeError("Unexpected error in question_to_dataframe")
 
     def _generate_plot_parameters(
         self, question: str, dataframe: pd.DataFrame, retry_count: int
@@ -173,6 +192,10 @@ class LLMDataVisualizer:
         prompt = self._construct_plot_prompt(question, dataframe)
         raw_response = self._llm_client.generate_content(prompt, retry_count)
         return self._llm_client.clean_markdown_block(raw_response, "json")
+
+    def _validate_plot_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        # @TODO: Implement validation logic
+        return parameters
 
     def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
         try:
@@ -204,5 +227,5 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
 
     logger.info("Initializing Visualizer...")
-    visualizer = LLMDataVisualizer(Path(arguments.db_path))
+    visualizer = LLMDataVisualizer(Path(arguments.database_path))
     logger.info(visualizer.export_schema()[:100])

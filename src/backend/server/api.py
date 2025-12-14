@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from io import BytesIO
 from pathlib import Path
@@ -27,8 +28,8 @@ settings (database path / model).
 
 
 class SettingsPayload(BaseModel):
-    db_path: str
-    db_type: Optional[str] = "sqlite"
+    database_path: str
+    database_type: Optional[str] = "sqlite"
     model: Optional[str] = None
 
 
@@ -102,7 +103,7 @@ def serve_index() -> FileResponse:
 _VIZ: Optional[LLMDataVisualizer] = None
 
 
-def get_viz() -> LLMDataVisualizer:
+def get_visualizer() -> LLMDataVisualizer:
     """Return a singleton `LLMDataVisualizer` instance.
 
     The visualizer is lazily initialized with a reasonable default
@@ -112,7 +113,16 @@ def get_viz() -> LLMDataVisualizer:
     if _VIZ is None:
         default_db = Path("data/chinook.db")
         logger.info("Initializing visualizer with default DB: %s", default_db)
-        _VIZ = LLMDataVisualizer(db_path=default_db)
+
+        model = os.environ.get("LLM_DATA_VISUALIZER_MODEL")
+        if not model:
+            raise RuntimeError("LLM_DATA_VISUALIZER_MODEL environment variable not set")
+        logger.info("Using LLM model: %s", model)
+
+        _VIZ = LLMDataVisualizer(
+            database_path=default_db,
+            model=model,
+        )
     return _VIZ
 
 
@@ -204,26 +214,26 @@ def ax_to_bytes(ax: Any, fmt: str = "png") -> bytes:
 def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
     """Update database credentials / path and optionally model.
 
-    Example payload: { "db_path": "data/chinook.db", "db_type": "sqlite" }
+    Example payload: { "database_path": "data/chinook.db", "database_type": "sqlite" }
     Returns a dict confirming the new settings on success.
     """
     global _VIZ
     try:
-        db_path = Path(payload.db_path)
+        database_path = Path(payload.database_path)
         model = payload.model
-        db_type = str(payload.db_type)
+        database_type = str(payload.database_type)
         logger.info(
             "Updating settings: db=%s, type=%s, model=%s",
-            db_path,
-            db_type,
+            database_path,
+            database_type,
             model,
         )
         _VIZ = LLMDataVisualizer(
-            db_path=db_path,
-            db_type=db_type,
-            model=model or "gemini-2.5-flash-lite",
+            database_path=database_path,
+            database_type=database_type,
+            model=model or "gemma-3-4b-it",
         )
-        return {"status": "ok", "db_path": str(db_path)}
+        return {"status": "ok", "database_path": str(database_path)}
     except Exception as e:
         logger.exception("Failed to update settings: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -235,7 +245,7 @@ def get_schema_image() -> Response:
 
     Tries to return an SVG when possible, otherwise returns a PNG image.
     """
-    viz = get_viz()
+    viz = get_visualizer()
     try:
         svg_path = viz.plot_schema()
         if svg_path is not None and Path(svg_path).exists():
@@ -258,13 +268,13 @@ def get_schema_image() -> Response:
 
 
 @app.get("/describe")
-def get_db_description() -> JSONResponse:
+def get_database_description() -> JSONResponse:
     """Return the database description as a JSON response.
 
     The response content contains a `rows` key with an array of
     table/column description objects.
     """
-    viz = get_viz()
+    viz = get_visualizer()
     try:
         df = viz.describe_database()
         if df is None or df.empty:
@@ -285,13 +295,15 @@ def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
     Query param `format` supports: `png`, `svg`, `pdf`. The endpoint
     returns a `Response` with the appropriate content type.
     """
-    viz = get_viz()
+    viz = get_visualizer()
     try:
         # 1) get dataframe (as pandas DataFrame)
-        df = viz.question_to_df(payload.question)
+        df = viz.question_to_dataframe(payload.question)
 
         # 2) build plot (axes) -- do not show
-        ax, should_plot = viz.question_to_plot(payload.question, show=False, verbose=1)
+        ax, should_plot = viz.question_to_plot(
+            payload.question, show=False, verbosity=1
+        )
         if ax is None:
             raise RuntimeError("No axes generated for the question result")
 
@@ -341,9 +353,9 @@ def random_questions(count: int = 10) -> JSONResponse:
     that could be used to create visualizations. Returns a JSON
     response with a `questions` list.
     """
-    viz = get_viz()
+    visualizer = get_visualizer()
     try:
-        schema = viz.export_schema()
+        schema = visualizer.export_schema()
         prompt = textwrap.dedent(
             f"""
         You are a data analyst assistant.
@@ -370,7 +382,7 @@ def random_questions(count: int = 10) -> JSONResponse:
         """
         )
 
-        raw = viz._llm_client.generate_content(prompt, retries=3)
+        raw = visualizer._llm_client.generate_content(prompt, retry_count=3)
         # basic cleanup: strip fences and split lines
         text = raw.strip().strip("`").strip()
         lines = [

@@ -17,10 +17,10 @@ def create_test_db(path: Path) -> None:
 
 
 def test_question_to_df_and_plot(tmp_path: Path, monkeypatch):
-    db_path = tmp_path / "test_viz.db"
-    create_test_db(db_path)
+    database_path = tmp_path / "test_viz.db"
+    create_test_db(database_path)
 
-    viz = LLMDataVisualizer(database_path=db_path)
+    viz = LLMDataVisualizer(database_path=database_path)
 
     # Provide a dummy LLM client that returns SQL for the first call and JSON for the second
     class DummyLLM:
