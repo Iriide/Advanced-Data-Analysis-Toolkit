@@ -3,7 +3,7 @@ from typing import Callable, Optional, Any
 import time
 from google import genai
 from backend.utils.logger import get_logger
-from google.genai.errors import ClientError
+from google.genai.errors import ClientError, ServerError
 
 logger = get_logger(__name__)
 
