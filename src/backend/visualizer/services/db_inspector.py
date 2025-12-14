@@ -1,5 +1,6 @@
 import sqlite3
 import uuid
+import argparse
 import tempfile
 import pandas as pd
 import numpy as np
@@ -7,6 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 from sqlalchemy import create_engine, MetaData, Engine
 from sqlalchemy_schemadisplay import create_schema_graph
+from backend.utils.logger import configure_logging, get_logger
 
 NUMERIC_DATA_TYPES = ("INTEGER", "REAL", "NUMERIC", "FLOAT", "DOUBLE")
 
@@ -17,6 +19,7 @@ class DatabaseInspector:
     """
 
     def __init__(self, database_path: Path, database_type: str = "sqlite"):
+        """Initialize the inspector with database location and type."""
         self._database_path = database_path
         self._database_type = database_type
         self._connection_string = (
@@ -40,6 +43,8 @@ class DatabaseInspector:
     def _get_numeric_column_statistics(
         self, cursor: sqlite3.Cursor, table_name: str, column_name: str
     ) -> dict[str, Optional[float]]:
+        """Compute basic statistics for a numeric column."""
+
         query = f"""
             SELECT COUNT([{column_name}]), MIN([{column_name}]), AVG([{column_name}]), MAX([{column_name}])
             FROM {table_name};
@@ -58,6 +63,7 @@ class DatabaseInspector:
     def _get_categorical_column_statistics(
         self, cursor: sqlite3.Cursor, table_name: str, column_name: str
     ) -> dict[str, Optional[float]]:
+        """Compute frequency-based statistics for a categorical column."""
         query = f"""
             SELECT COUNT([{column_name}]), COUNT(DISTINCT [{column_name}]),
             (SELECT [{column_name}] FROM {table_name} GROUP BY [{column_name}] ORDER BY COUNT(*) DESC LIMIT 1),
@@ -78,6 +84,7 @@ class DatabaseInspector:
     def _get_column_statistics(
         self, cursor: sqlite3.Cursor, table_name: str, column_name: str, data_type: str
     ) -> dict[str, Optional[float]]:
+        """Dispatch to numeric or categorical statistics based on column type."""
         if data_type.upper() in NUMERIC_DATA_TYPES:
             return self._get_numeric_column_statistics(cursor, table_name, column_name)
         return self._get_categorical_column_statistics(cursor, table_name, column_name)
@@ -101,6 +108,7 @@ class DatabaseInspector:
         return result
 
     def _get_table_names(self) -> list[str]:
+        """Return a list of user-defined table names in the database."""
         connection = self.create_connection()
         try:
             cursor = connection.cursor()
@@ -112,6 +120,7 @@ class DatabaseInspector:
             connection.close()
 
     def _create_table_description_with_index(self, table_name: str) -> pd.DataFrame:
+        """Create a table description DataFrame with a hierarchical index."""
         table_description = self.describe_table(table_name)
         table_index = pd.Index([table_name] * len(table_description), name="table")
         table_description.set_index(table_index, append=True, inplace=True)
@@ -137,6 +146,7 @@ class DatabaseInspector:
         return "\n".join(schema_statements)
 
     def _configure_schema_graph_nodes(self, graph: Any) -> None:
+        """Apply visual styling to schema graph nodes."""
         for node in graph.get_nodes():
             node.set_color("#1f77b4")
             node.set_penwidth("1.5")
@@ -144,6 +154,7 @@ class DatabaseInspector:
         graph.set_bgcolor("#ffffff")
 
     def _create_schema_graph(self, engine: Engine, metadata: MetaData) -> Any:
+        """Create a schema graph using SQLAlchemy metadata."""
         graph = create_schema_graph(
             engine=engine,
             metadata=metadata,
@@ -165,6 +176,7 @@ class DatabaseInspector:
         return graph
 
     def _generate_schema_svg_path(self) -> Path:
+        """Generate a temporary file path for the schema SVG."""
         temporary_directory = Path(tempfile.gettempdir())
         return (
             temporary_directory / f"{self._database_type}-schema-{uuid.uuid4().hex}.svg"
@@ -191,13 +203,9 @@ class DatabaseInspector:
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="Test Database Inspector")
     parser.add_argument("--db-path", type=str, default="data/chinook.db")
     arguments = parser.parse_args()
-
-    from backend.utils.logger import configure_logging, get_logger
 
     configure_logging()
     logger = get_logger(__name__)

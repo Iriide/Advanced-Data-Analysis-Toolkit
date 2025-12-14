@@ -33,9 +33,13 @@ dev = [
     "vulture>=2.14",
 ]
 
+test = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+]
+
 [tool.mypy]
 # --- GLOBAL SETTINGS ---
-python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -44,6 +48,7 @@ mypy_path = "src"
 exclude = "(^sketches/.*|^tests/.*)"
 explicit_package_bases = true
 disable_error_code = ["untyped-decorator"]
+strict = true
 
 [[tool.mypy.overrides]]
 module = "matplotlib.*"

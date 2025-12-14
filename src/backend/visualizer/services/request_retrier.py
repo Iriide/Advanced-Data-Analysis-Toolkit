@@ -19,6 +19,7 @@ class GeminiAPIRequestRetrier:
         wait_seconds_client: int = 60,
         wait_seconds_server: int = 5,
     ):
+        """Initialize retry limits and backoff timings."""
         self._retries = retries
         self._original_retries = retries
         self._wait_seconds_client = wait_seconds_client
@@ -27,12 +28,14 @@ class GeminiAPIRequestRetrier:
     def _extract_status_from_error(
         self, error: ClientError
     ) -> Optional[tuple[int, str]]:
+        """Extract HTTP status code and status string from a client error."""
         error_details = error.details.get("error", {})
         return error_details.get("code", None), error_details.get("status", None)
 
     def _extract_wait_time_from_error(
         self, error: ClientError, zero_to_minute: bool = True
     ) -> int:
+        """Extract retry delay in seconds from a Gemini API error response."""
         # sample error details for reference:
         # {
         #   'error': {
@@ -99,7 +102,7 @@ class GeminiAPIRequestRetrier:
         return int(seconds)
 
     def _handle_client_error(self, error: ClientError) -> int:
-
+        """Handle client-side API errors and determine retry delay."""
         retry_timeout = self._wait_seconds_client
 
         e_for_print = str(error)
@@ -117,15 +120,17 @@ class GeminiAPIRequestRetrier:
         return retry_timeout
 
     def _handle_server_error(self, error: ServerError) -> int:
+        """Handle server-side API errors and determine retry delay."""
         logger.warning(f"ServerError encountered: {error}")
         return self._wait_seconds_server
 
     def _sleep(self, seconds: int) -> None:
+        """Sleep for the given number of seconds."""
         for _ in range(seconds):
             time.sleep(1)
 
     def run(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-
+        """Execute a callable with retry logic for Gemini API errors."""
         retries_left = self._retries
 
         while True:
@@ -148,10 +153,12 @@ class GeminiAPIRequestRetrier:
             retries_left -= 1
 
     def reset_retries(self, new_retries: Optional[int] = None) -> None:
+        """Reset retry counter to the original or a new value."""
         if new_retries is not None:
             self._retries = new_retries
         else:
             self._retries = self._original_retries
 
     def retries_exhausted(self) -> bool:
+        """Return True if no retries remain."""
         return self._retries <= 0

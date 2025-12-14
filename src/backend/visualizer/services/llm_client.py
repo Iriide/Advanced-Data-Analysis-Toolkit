@@ -4,6 +4,8 @@ from google import genai
 from dotenv import load_dotenv
 from backend.utils.logger import get_logger
 from backend.visualizer.services.request_retrier import GeminiAPIRequestRetrier
+import argparse
+from backend.utils.logger import configure_logging
 
 logger = get_logger(__name__)
 
@@ -20,6 +22,7 @@ class LLMClient:
     """
 
     def __init__(self, model: str = "gemma-3-4b-it", load_environment: bool = True):
+        """Initialize the LLM client and load environment configuration."""
         if load_environment:
             load_dotenv()
 
@@ -31,6 +34,7 @@ class LLMClient:
         self._request_retrier = GeminiAPIRequestRetrier()
 
     def _call_api(self, prompt: str) -> str:
+        """Send a prompt directly to the Gemini API."""
         response = self._client.models.generate_content(
             model=self._model, contents=prompt
         )
@@ -105,10 +109,6 @@ class LLMClient:
 
 
 if __name__ == "__main__":
-    import argparse
-    from backend.utils.logger import configure_logging
-    import re
-
     parser = argparse.ArgumentParser(description="Test the LLMClient independently.")
     parser.add_argument("--prompt", type=str, default="Hello, are you working?")
     arguments = parser.parse_args()

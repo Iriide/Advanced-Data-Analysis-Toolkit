@@ -47,7 +47,7 @@ class LLMDataVisualizer:
             logger.warning("Config file not found at %s", path)
             return ""
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             plot_parameters = (
                 f.read()
                 .replace("\n        ", " - ")
@@ -76,6 +76,7 @@ class LLMDataVisualizer:
             return plot_parameters
 
     def _construct_sql_prompt(self, question: str, schema: str) -> str:
+        """Construct an LLM prompt for generating an SQL query."""
         return textwrap.dedent(
             f"""
         ```db-schema
@@ -98,6 +99,7 @@ class LLMDataVisualizer:
         )
 
     def _construct_plot_prompt(self, question: str, dataframe: pd.DataFrame) -> str:
+        """Construct an LLM prompt for generating dataframe plot parameters."""
         return textwrap.dedent(
             f"""
 
@@ -132,6 +134,7 @@ class LLMDataVisualizer:
         )
 
     def _log_sql_query(self, sql_query: str) -> None:
+        """Log the generated SQL query, truncating if necessary."""
         if sql_query and len(sql_query) > SQL_QUERY_LOG_TRUNCATION_LENGTH:
             truncated = sql_query[:SQL_QUERY_LOG_TRUNCATION_LENGTH].replace("\n", " ")
             logger.info(
@@ -142,21 +145,26 @@ class LLMDataVisualizer:
             logger.info("Generated SQL: %s", sql_query)
 
     def describe_database(self) -> pd.DataFrame:
+        """Return a summary description of the database schema."""
         return self._database_inspector.describe_database()
 
     def export_schema(self) -> str:
+        """Export the database schema as a textual representation."""
         return self._database_inspector.export_schema()
 
     def plot_schema(self) -> Optional[Path]:
+        """Generate and save a visual representation of the database schema."""
         return self._database_inspector.plot_schema()
 
     def _generate_sql_query(self, question: str, retry_count: int) -> str:
+        """Generate an SQL query from a natural language question."""
         schema = self._database_inspector.export_schema()
         prompt = self._construct_sql_prompt(question, schema)
         raw_response = self._llm_client.generate_content(prompt, retry_count)
         return self._llm_client.clean_markdown_block(raw_response, "sql(ite)?")
 
     def _execute_sql_query(self, sql_query: str) -> pd.DataFrame:
+        """Execute an SQL query and return the results as a DataFrame."""
         dataframe = self._database_inspector.execute_query(sql_query)
         logger.info(
             "Query returned %d rows and %d columns",
@@ -189,6 +197,7 @@ class LLMDataVisualizer:
     def _generate_plot_parameters(
         self, question: str, dataframe: pd.DataFrame, retry_count: int
     ) -> str:
+        """Generate JSON plot parameters for a dataframe using the LLM."""
         prompt = self._construct_plot_prompt(question, dataframe)
         raw_response = self._llm_client.generate_content(prompt, retry_count)
         return self._llm_client.clean_markdown_block(raw_response, "json")
@@ -198,6 +207,7 @@ class LLMDataVisualizer:
         return parameters
 
     def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
+        """Parse plot parameters and plotting decision from JSON."""
         try:
             parameters = json.loads(json_string)
             should_plot = parameters.pop("should_plot", False)
@@ -207,10 +217,12 @@ class LLMDataVisualizer:
             return {}, False
 
     def question_to_plot(
-        self, question: str, retry_count: int = 3, show: bool = True, verbosity: int = 1
+        self, question: str, retry_count: int = 3, show: bool = True, verbosity: int = 1,
+        dataframe: Optional[pd.DataFrame] = None,
     ) -> Tuple[Optional[Axes], bool]:
         """Generates and displays a plot based on the user's question."""
-        dataframe = self.question_to_dataframe(question, retry_count)
+        dataframe = dataframe if dataframe is not None else self.question_to_dataframe(question, retry_count)
+
         logger.info("Dataframe shape: %s", dataframe.shape)
         logger.debug("Dataframe head:\n%s", dataframe.head().to_markdown())
 

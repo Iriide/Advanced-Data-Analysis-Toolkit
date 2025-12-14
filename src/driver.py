@@ -25,7 +25,7 @@ SAMPLE_QUESTIONS = [
 
 
 def parse_cli_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
-
+    """Add CLI-specific command-line arguments to the parser."""
     parser.add_argument(
         "--question",
         type=str,
@@ -50,6 +50,7 @@ def parse_cli_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
 
 
 def parse_server_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
+    """Add server-specific command-line arguments to the parser."""
     parser.add_argument(
         "--dev",
         action="store_true",
@@ -69,7 +70,7 @@ def parse_server_arguments(parser: argparse.ArgumentParser, postfix: str) -> Non
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
-
+    """Create and configure the main argument parser."""
     parser = argparse.ArgumentParser(description="LLM Data Visualizer Driver")
 
     parser.add_argument(
@@ -99,23 +100,25 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
 
     parse_cli_arguments(parser, " (CLI mode only).")
-
     parse_server_arguments(parser, " (Server mode only).")
 
     return parser
 
 
 def parse_arguments() -> argparse.Namespace:
+    """Parse command-line arguments and return the populated namespace."""
     return create_argument_parser().parse_args()
 
 
 def determine_logging_level(arguments: argparse.Namespace) -> int:
+    """Determine logging level based on verbosity flags."""
     if hasattr(arguments, "verbosity") and arguments.verbosity > 0:
         return logging.DEBUG
     return logging.INFO
 
 
 def initialize_logging(arguments: argparse.Namespace) -> None:
+    """Initialize application logging configuration."""
     global logger
     logging_level = determine_logging_level(arguments)
     configure_logging(level=logging_level, log_file=arguments.log_file)
@@ -123,9 +126,9 @@ def initialize_logging(arguments: argparse.Namespace) -> None:
 
 
 def _open_browser(port: int, delay: int = 3) -> None:
-
+    """Open the default web browser to the local server after an optional delay."""
     if delay and delay > 0:
-        sleep(delay)  # Wait for the server to start
+        sleep(delay)
     browser_opened = subprocess.call(
         [
             "python",
@@ -142,6 +145,7 @@ def _open_browser(port: int, delay: int = 3) -> None:
 
 
 def run_server(arguments: argparse.Namespace) -> None:
+    """Start the FastAPI server using uvicorn."""
     logger.info("--- Starting Server ---")
 
     try:
@@ -163,6 +167,7 @@ def run_server(arguments: argparse.Namespace) -> None:
 
 
 def validate_database_path(arguments: argparse.Namespace) -> Path:
+    """Validate that the database path exists and return it as a Path."""
     database_path = Path(arguments.database_path)
     if not database_path.exists():
         raise FileNotFoundError(f"Database not found at {database_path}")
@@ -170,17 +175,20 @@ def validate_database_path(arguments: argparse.Namespace) -> Path:
 
 
 def convert_svg_to_image(svg_path: Path) -> Image.Image:
+    """Convert an SVG file to a PIL Image."""
     png_bytes = cairosvg.svg2png(url=str(svg_path), scale=2)
     return Image.open(io.BytesIO(png_bytes))
 
 
 def display_image(image: Image.Image) -> None:
+    """Display a PIL Image using matplotlib."""
     plt.imshow(image)
     plt.axis("off")
     plt.show()
 
 
 def generate_and_display_schema(visualizer: LLMDataVisualizer) -> None:
+    """Generate the database schema visualization and display it."""
     logger.info("--- Generating Schema Plot ---")
     schema_path = visualizer.plot_schema()
     if not schema_path:
@@ -192,6 +200,7 @@ def generate_and_display_schema(visualizer: LLMDataVisualizer) -> None:
 
 
 def select_question(question: str) -> str:
+    """Select a random sample question if requested."""
     if question == "random":
         selected: str = np.random.choice(SAMPLE_QUESTIONS)
         print(f"Using random sample: '{selected}'")
@@ -200,18 +209,21 @@ def select_question(question: str) -> str:
 
 
 def analyze_question(question: str, visualizer: LLMDataVisualizer) -> None:
+    """Analyze a question and generate a corresponding visualization."""
     selected_question = select_question(question)
     logger.info("\n--- Analyzing: %s ---", selected_question)
     visualizer.question_to_plot(selected_question, show=True)
 
 
 def display_database_description(visualizer: LLMDataVisualizer) -> None:
+    """Display a summary description of the database."""
     logger.info("\n--- Database Description ---")
     description_dataframe = visualizer.describe_database()
     logger.info("\n%s", description_dataframe.to_markdown())
 
 
 def run_cli_mode(arguments: argparse.Namespace) -> None:
+    """Execute the application in CLI mode."""
     database_path = validate_database_path(arguments)
     visualizer = LLMDataVisualizer(
         database_path=database_path,
@@ -227,6 +239,7 @@ def run_cli_mode(arguments: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    """Entry point for the application."""
     arguments = parse_arguments()
     initialize_logging(arguments)
 
@@ -239,3 +252,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

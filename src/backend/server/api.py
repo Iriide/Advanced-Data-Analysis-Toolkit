@@ -2,10 +2,12 @@ import os
 import numpy as np
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Any, Iterable, Dict, AsyncGenerator
+from typing import Optional, Any, Iterable, Dict, AsyncGenerator, Tuple
 import uuid
 import logging
 import textwrap
+import uvicorn
+import pandas as pd
 
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import asynccontextmanager
@@ -16,6 +18,8 @@ from pydantic import BaseModel
 
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 from backend.utils.logger import get_logger
+
+import matplotlib.pyplot as plt
 
 logger = get_logger(__name__)
 """API server for the Advanced Data Analysis Toolkit.
@@ -42,14 +46,13 @@ logger = logging.getLogger("uvicorn")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # --- Startup Logic (if any) ---
+    """Run startup and shutdown hooks for the FastAPI application."""
     logger.info("Server starting up...")
     yield
     # --- Shutdown Logic (Runs when server stops) ---
     print("do widzenia")
 
     # Adjust path logic relative to THIS file location
-    # You might need to adjust parents depending on where api.py sits
     plots_dir = Path(__file__).parents[2] / "frontend/static/plots"
 
     if plots_dir.exists() and plots_dir.is_dir():
@@ -84,6 +87,7 @@ else:
         "Static directory %s not found; not mounting static files", STATIC_DIR
     )
 
+SUPPORTED_FORMATS = ("png", "svg", "pdf")
 
 @app.get("/", response_class=FileResponse)
 def serve_index() -> FileResponse:
@@ -135,9 +139,7 @@ def fig_to_png_bytes(fig: Any) -> bytes:
 
 
 def ax_to_png_bytes(ax: Any) -> bytes:
-    # Accept Axes or iterable of Axes
-    import matplotlib.pyplot as plt
-
+    """Serialize Axes (or iterable of Axes) to PNG bytes."""
     fig = None
     try:
         if hasattr(ax, "get_figure"):
@@ -177,8 +179,6 @@ def fig_to_bytes(fig: Any, fmt: str = "png") -> bytes:
         return buf.read()
     finally:
         try:
-            import matplotlib.pyplot as plt
-
             plt.close(fig)
         except Exception:
             pass
@@ -189,8 +189,6 @@ def ax_to_bytes(ax: Any, fmt: str = "png") -> bytes:
 
     Returns the serialized bytes in the requested `fmt`.
     """
-    import matplotlib.pyplot as plt
-
     fig = None
     try:
         if hasattr(ax, "get_figure"):
@@ -254,7 +252,6 @@ def get_schema_image() -> Response:
 
         # Fallback: render schema text into a PNG image
         schema_text = viz.export_schema()
-        import matplotlib.pyplot as plt
 
         fig = plt.figure(figsize=(8, 10))
         fig.patch.set_visible(False)
@@ -288,56 +285,63 @@ def get_database_description() -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+def _normalize_format(fmt: Optional[str], default: str = "svg") -> str:
+    """Normalize and validate the requested output format."""
+    fmt2 = (fmt or default).lower()
+    return fmt2 if fmt2 in SUPPORTED_FORMATS else default
+
+
+def _save_plot_bytes(img_bytes: bytes, fmt: str, plots_dir: Path) -> str:
+    """Save plot bytes under the static plots directory and return its URL path."""
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    ext = "svg" if fmt == "svg" else ("pdf" if fmt == "pdf" else "png")
+    filename = f"plot_{uuid.uuid4().hex}.{ext}"
+    (plots_dir / filename).write_bytes(img_bytes)
+    return f"/static/plots/{filename}"
+
+
+def _dataframe_to_json_payload(df: Optional[pd.DataFrame]) -> Dict[str, Any]:
+    """Convert a DataFrame into a JSON-serializable payload."""
+    if df is None or df.empty:
+        return {"columns": [], "rows": []}
+    df2 = df.reset_index()
+    rows = df2.replace({np.nan: None}).to_dict(orient="records")
+    return {"columns": df2.columns.tolist(), "rows": rows}
+
+
+def _get_axes_for_question(
+    viz: LLMDataVisualizer, question: str, retry_count: int = 3, dataframe: Optional[pd.DataFrame] = None
+) -> Tuple[Any, bool]:
+    """Generate plot axes for a question and return (axes, should_plot)."""
+    ax, should_plot = viz.question_to_plot(question, retry_count=retry_count, show=False, verbosity=1, dataframe=dataframe)
+    if ax is None:
+        raise RuntimeError("No axes generated for the question result")
+    return ax, bool(should_plot)
+
+
 @app.post("/question")
 def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
-    """Accept a question and return the generated plot image.
-
-    Query param `format` supports: `png`, `svg`, `pdf`. The endpoint
-    returns a `Response` with the appropriate content type.
-    """
+    """Answer a question and return a plot URL plus tabular results as JSON."""
     viz = get_visualizer()
     try:
-        # 1) get dataframe (as pandas DataFrame)
-        df = viz.question_to_dataframe(payload.question)
+        question = payload.question
 
-        # 2) build plot (axes) -- do not show
-        ax, should_plot = viz.question_to_plot(
-            payload.question, show=False, verbosity=1
-        )
-        if ax is None:
-            raise RuntimeError("No axes generated for the question result")
+        df = viz.question_to_dataframe(question)
+        ax, should_plot = _get_axes_for_question(viz, question, 3, df)
 
-        fmt = (format or "svg").lower()
-        if fmt not in ("png", "svg", "pdf"):
-            fmt = "svg"
-
-        # 3) serialize image bytes
+        fmt = _normalize_format(format, default="svg")
         img_bytes = ax_to_bytes(ax, fmt=fmt)
 
-        # 4) save image into frontend static plots directory so clients can fetch by URL
-        plots_dir = STATIC_DIR / "plots"
-        plots_dir.mkdir(parents=True, exist_ok=True)
-        ext = "svg" if fmt == "svg" else ("pdf" if fmt == "pdf" else "png")
-        filename = f"plot_{uuid.uuid4().hex}.{ext}"
-        file_path = plots_dir / filename
-        file_path.write_bytes(img_bytes)
-
-        image_url = f"/static/plots/{filename}"
-
-        # 5) convert DataFrame to JSON-serializable structure
-        if df is None or df.empty:
-            records = []
-            columns = []
-        else:
-            df2 = df.reset_index()
-            records = df2.replace({np.nan: None}).to_dict(orient="records")
-            columns = df2.columns.tolist()
+        image_url = _save_plot_bytes(img_bytes, fmt, plots_dir=STATIC_DIR / "plots")
+        df_payload = _dataframe_to_json_payload(df)
 
         return JSONResponse(
             content={
-                "df": {"columns": columns, "rows": records},
+                "df": df_payload,
                 "image_url": image_url,
-                "should_plot": bool(should_plot),
+                "should_plot": should_plot,
             }
         )
     except Exception as e:
@@ -383,7 +387,6 @@ def random_questions(count: int = 10) -> JSONResponse:
         )
 
         raw = visualizer._llm_client.generate_content(prompt, retry_count=3)
-        # basic cleanup: strip fences and split lines
         text = raw.strip().strip("`").strip()
         lines = [
             line.strip().lstrip("-").lstrip("0123456789. ")
@@ -413,6 +416,4 @@ def random_questions(count: int = 10) -> JSONResponse:
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     uvicorn.run("backend.server.api:app", host="0.0.0.0", port=8000, reload=False)
