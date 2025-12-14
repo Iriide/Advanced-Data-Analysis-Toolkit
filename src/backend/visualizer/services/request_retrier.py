@@ -3,7 +3,7 @@ from typing import Callable, Optional, Any
 import time
 from google import genai
 from backend.utils.logger import get_logger
-from google.genai import errors as genai_errors
+from google.genai.errors import ClientError
 
 logger = get_logger(__name__)
 
@@ -25,13 +25,13 @@ class GeminiAPIRequestRetrier:
         self._wait_seconds_server = wait_seconds_server
 
     def _extract_status_from_error(
-        self, error: genai_errors.ClientError
+        self, error: ClientError
     ) -> Optional[tuple[int, str]]:
         error_details = error.details.get("error", {})
         return error_details.get("code", None), error_details.get("status", None)
 
     def _extract_wait_time_from_error(
-        self, error: genai_errors.ClientError, zero_to_minute: bool = True
+        self, error: ClientError, zero_to_minute: bool = True
     ) -> int:
         # sample error details for reference:
         # {
@@ -98,7 +98,7 @@ class GeminiAPIRequestRetrier:
 
         return int(seconds)
 
-    def _handle_client_error(self, error: genai_errors.ClientError) -> int:
+    def _handle_client_error(self, error: ClientError) -> int:
 
         retry_timeout = self._wait_seconds_client
 
@@ -116,7 +116,7 @@ class GeminiAPIRequestRetrier:
 
         return retry_timeout
 
-    def _handle_server_error(self, error: genai_errors.ServerError) -> int:
+    def _handle_server_error(self, error: ServerError) -> int:
         logger.warning(f"ServerError encountered: {error}")
         return self._wait_seconds_server
 
