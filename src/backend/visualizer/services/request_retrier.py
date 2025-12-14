@@ -126,8 +126,7 @@ class GeminiAPIRequestRetrier:
 
     def _sleep(self, seconds: int) -> None:
         """Sleep for the given number of seconds."""
-        for _ in range(seconds):
-            time.sleep(1)
+        time.sleep(seconds)
 
     def run(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute a callable with retry logic for Gemini API errors."""

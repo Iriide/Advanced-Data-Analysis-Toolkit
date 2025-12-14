@@ -70,10 +70,10 @@ class LLMClient:
 
         except GeminiAPIRequestRetrier.SourceExhaustedError as e:
             logger.error(f"LLM API call failed after {retry_count} retries: {e}")
+            raise
         except RuntimeError as e:
             logger.error(f"LLM API call failed with runtime error: {e}")
-
-        return ""
+            raise
 
     @staticmethod
     def clean_markdown_block(text: str, block_type: str | None = None) -> str:

@@ -84,6 +84,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--model",
         type=str,
         default="gemma-3-4b-it",
+        help="LLM model to use (e.g., gemma-3-4b-it, gemini-2.5-flash).",
     )
     parser.add_argument(
         "-v",
@@ -131,7 +132,7 @@ def _open_browser(port: int, delay: int = 3) -> None:
         sleep(delay)
     browser_opened = subprocess.call(
         [
-            "python",
+            "sys.executable",
             "-c",
             f"import webbrowser; webbrowser.open('http://localhost:{port}')",
         ],

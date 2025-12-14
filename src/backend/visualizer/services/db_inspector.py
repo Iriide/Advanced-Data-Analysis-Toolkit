@@ -210,6 +210,6 @@ if __name__ == "__main__":
     configure_logging()
     logger = get_logger(__name__)
 
-    inspector = DatabaseInspector(Path(arguments.database_path))
+    inspector = DatabaseInspector(Path(arguments.db_path))
     logger.info("Schema Snippet:\n%s", inspector.export_schema()[:200])
     logger.info("\nStats Snippet:\n%s", inspector.describe_database().head())

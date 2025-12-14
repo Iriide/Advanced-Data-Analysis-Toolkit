@@ -21,7 +21,6 @@ from backend.utils.logger import get_logger
 
 import matplotlib.pyplot as plt
 
-logger = get_logger(__name__)
 """API server for the Advanced Data Analysis Toolkit.
 
 This module exposes a small FastAPI app that serves the frontend
@@ -120,7 +119,8 @@ def get_visualizer() -> LLMDataVisualizer:
 
         model = os.environ.get("LLM_DATA_VISUALIZER_MODEL")
         if not model:
-            raise RuntimeError("LLM_DATA_VISUALIZER_MODEL environment variable not set")
+            logger.error("LLM_DATA_VISUALIZER_MODEL environment variable not set. Please set this variable to specify "
+                         "the LLM model to use. Example: export LLM_DATA_VISUALIZER_MODEL='gpt-3.5-turbo'")
         logger.info("Using LLM model: %s", model)
 
         _VIZ = LLMDataVisualizer(
