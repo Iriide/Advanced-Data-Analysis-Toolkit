@@ -2,7 +2,7 @@ import sqlite3
 import json
 from pathlib import Path
 import pandas as pd
-from visualizer.llm_data_visualizer import LLMDataVisualizer
+from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 
 
 def create_test_db(path: Path) -> None:
@@ -20,11 +20,11 @@ def test_question_to_df_and_plot(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "test_viz.db"
     create_test_db(db_path)
 
-    viz = LLMDataVisualizer(db_path=db_path)
+    viz = LLMDataVisualizer(database_path=db_path)
 
     # Provide a dummy LLM client that returns SQL for the first call and JSON for the second
     class DummyLLM:
-        def generate_content(self, model_or_prompt, retries=3):
+        def generate_content(self, model_or_prompt, retry_count=3):
             prompt = model_or_prompt
             if "db-schema" in prompt:
                 return "SELECT id, name, value FROM items"
@@ -40,9 +40,9 @@ def test_question_to_df_and_plot(tmp_path: Path, monkeypatch):
 
     viz._llm_client = DummyLLM()
 
-    df = viz.question_to_df("Give me items", retries=1)
+    df = viz.question_to_dataframe("Give me items", retry_count=1)
     assert isinstance(df, pd.DataFrame)
     assert list(df.columns) == ["id", "name", "value"]
 
-    ax, plotted = viz.question_to_plot("Give me items", retries=1, show=False)
+    ax, plotted = viz.question_to_plot("Give me items", retry_count=1, show=False)
     assert isinstance(plotted, bool)

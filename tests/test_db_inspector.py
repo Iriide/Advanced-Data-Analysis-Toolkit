@@ -1,9 +1,7 @@
 import sqlite3
 from pathlib import Path
-import tempfile
-import os
 import pandas as pd
-from core.db_inspector import DBInspector
+from backend.visualizer.services.db_inspector import DatabaseInspector
 
 
 def create_test_db(path: Path) -> None:
@@ -18,15 +16,15 @@ def create_test_db(path: Path) -> None:
     con.close()
 
 
-def test_db_inspector_run_query_and_describe(tmp_path: Path):
+def test_db_inspector_execute_query_and_describe(tmp_path: Path):
     db_path = tmp_path / "test.db"
     create_test_db(db_path)
 
-    inspector = DBInspector(db_path, db_type="sqlite")
-    df = inspector.run_query("SELECT * FROM people ORDER BY id;")
+    inspector = DatabaseInspector(database_path=db_path, database_type="sqlite")
+    df = inspector.execute_query("SELECT * FROM people ORDER BY id;")
     assert isinstance(df, pd.DataFrame)
     assert df.shape[0] == 3
-
+    assert list(df.columns) == ["id", "name", "age"]
     desc = inspector.describe_table("people")
     assert "age" in desc.index
     assert "dtype" in desc.columns

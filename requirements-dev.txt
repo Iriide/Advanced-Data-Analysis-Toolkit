@@ -1,9 +1,0 @@
-ruff
-black
-mypy
-pytest
-pytest-cov
-pip-audit
-vulture
-pandas-stubs
-pytest-cov

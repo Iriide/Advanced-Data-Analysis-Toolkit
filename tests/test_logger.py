@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from core.logger import get_logger, configure_logging
+from backend.visualizer.services.logger import get_logger, configure_logging
 
 
 def test_configure_and_get_logger(tmp_path: Path):

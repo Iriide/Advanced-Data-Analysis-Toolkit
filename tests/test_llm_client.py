@@ -1,4 +1,4 @@
-from core.llm_client import LLMClient
+from backend.visualizer.services.llm_client import LLMClient
 from unittest.mock import MagicMock
 
 
@@ -17,10 +17,12 @@ def test_generate_content_monkeypatch(monkeypatch):
             self.models.generate_content.return_value.text = "Mocked Response"
 
     # 2. Patch the generic library import where it is USED
-    monkeypatch.setattr("core.llm_client.genai.Client", FakeGenAIClient)
+    monkeypatch.setattr(
+        "backend.visualizer.services.llm_client.genai.Client", FakeGenAIClient
+    )
 
     # 3. Now initialize your wrapper (it will use the FakeGenAIClient)
-    client = LLMClient(load_env=False)
+    client = LLMClient(load_environment=False)
 
     # 4. Run your test
     response = client.generate_content("Hello")
