@@ -26,7 +26,7 @@ class LLMClient:
             load_dotenv()
 
         if API_KEY_ENVIRONMENT_VARIABLE not in os.environ:
-            raise ValueError(f"{API_KEY_ENVIRONMENT_VARIABLE} not set")
+            logger.warning(f"{API_KEY_ENVIRONMENT_VARIABLE} not set")
 
         self._model = model
         self._client = genai.Client()
