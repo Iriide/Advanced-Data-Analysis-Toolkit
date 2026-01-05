@@ -84,6 +84,7 @@ else:
 
 SUPPORTED_FORMATS = ("png", "svg", "pdf")
 
+
 @app.get("/", response_class=FileResponse)
 def serve_index() -> FileResponse:
     """Serve the frontend `index.html` file.
@@ -115,8 +116,10 @@ def get_visualizer() -> LLMDataVisualizer:
 
         model = os.environ.get("LLM_DATA_VISUALIZER_MODEL")
         if not model:
-            logger.error("LLM_DATA_VISUALIZER_MODEL environment variable not set. Please set this variable to specify "
-                         "the LLM model to use. Example: export LLM_DATA_VISUALIZER_MODEL='gpt-3.5-turbo'")
+            logger.error(
+                "LLM_DATA_VISUALIZER_MODEL environment variable not set. Please set this variable to specify "
+                "the LLM model to use. Example: export LLM_DATA_VISUALIZER_MODEL='gpt-3.5-turbo'"
+            )
         logger.info("Using LLM model: %s", model)
 
         _VIZ = LLMDataVisualizer(
@@ -281,8 +284,6 @@ def get_database_description() -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
 def _normalize_format(fmt: Optional[str], default: str = "svg") -> str:
     """Normalize and validate the requested output format."""
     fmt2 = (fmt or default).lower()
@@ -308,10 +309,15 @@ def _dataframe_to_json_payload(df: Optional[pd.DataFrame]) -> Dict[str, Any]:
 
 
 def _get_axes_for_question(
-    viz: LLMDataVisualizer, question: str, retry_count: int = 3, dataframe: Optional[pd.DataFrame] = None
+    viz: LLMDataVisualizer,
+    question: str,
+    retry_count: int = 3,
+    dataframe: Optional[pd.DataFrame] = None,
 ) -> Tuple[Any, bool]:
     """Generate plot axes for a question and return (axes, should_plot)."""
-    ax, should_plot = viz.question_to_plot(question, retry_count=retry_count, show=False, verbosity=1, dataframe=dataframe)
+    ax, should_plot = viz.question_to_plot(
+        question, retry_count=retry_count, show=False, verbosity=1, dataframe=dataframe
+    )
     if ax is None:
         raise RuntimeError("No axes generated for the question result")
     return ax, bool(should_plot)

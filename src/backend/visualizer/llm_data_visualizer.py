@@ -217,11 +217,19 @@ class LLMDataVisualizer:
             return {}, False
 
     def question_to_plot(
-        self, question: str, retry_count: int = 3, show: bool = True, verbosity: int = 1,
+        self,
+        question: str,
+        retry_count: int = 3,
+        show: bool = True,
+        verbosity: int = 1,
         dataframe: Optional[pd.DataFrame] = None,
     ) -> Tuple[Optional[Axes], bool]:
         """Generates and displays a plot based on the user's question."""
-        dataframe = dataframe if dataframe is not None else self.question_to_dataframe(question, retry_count)
+        dataframe = (
+            dataframe
+            if dataframe is not None
+            else self.question_to_dataframe(question, retry_count)
+        )
 
         logger.info("Dataframe shape: %s", dataframe.shape)
         logger.debug("Dataframe head:\n%s", dataframe.head().to_markdown())
