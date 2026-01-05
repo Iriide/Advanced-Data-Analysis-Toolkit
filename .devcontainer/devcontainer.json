@@ -2,7 +2,7 @@
 	"name": "Python 3",
 	"image": "mcr.microsoft.com/devcontainers/python:2-3.12-bullseye",
 
-	"postCreateCommand": "uv sync --all",
+	"postCreateCommand": "pip install uv && uv sync --all-extras",
 
 	"customizations": {
 		"vscode": {
