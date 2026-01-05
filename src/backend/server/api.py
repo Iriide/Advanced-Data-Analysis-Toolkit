@@ -8,17 +8,13 @@ import logging
 import textwrap
 import uvicorn
 import pandas as pd
-
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
-from backend.utils.logger import get_logger
-
 import matplotlib.pyplot as plt
 
 """API server for the Advanced Data Analysis Toolkit.
