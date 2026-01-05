@@ -1,10 +1,22 @@
+import matplotlib
+
+# Use a non-interactive backend to avoid starting a GUI (Tk) from
+# worker threads or server contexts. Must be set before importing
+# `pyplot`.
+try:
+    matplotlib.use("Agg")
+except Exception:
+    # If backend can't be set (already set elsewhere), continue.
+    pass
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional, cast
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.table import Table, Cell
-from backend.visualizer.services.logger import get_logger
+from backend.utils.logger import get_logger
+import numpy as np
 
 logger = get_logger(__name__)
 
@@ -24,6 +36,7 @@ class PlottingEngine:
 
     @staticmethod
     def _calculate_column_widths(dataframe: pd.DataFrame) -> list[int]:
+        """Calculate column widths based on content and header length."""
         column_widths: list[int] = [0] * len(dataframe.columns)
         for i, column in enumerate(dataframe.columns):
             maximum_data_length = (
@@ -37,12 +50,14 @@ class PlottingEngine:
 
     @staticmethod
     def _style_header_cell(cell: Cell) -> None:
+        """Apply header styling to a table cell."""
         cell.set_text_props(weight="bold", color="white")
         cell.set_facecolor(HEADER_BACKGROUND_COLOR)
         cell.set_edgecolor("white")
 
     @staticmethod
     def _style_data_cell(cell: Cell, row_index: int) -> None:
+        """Apply alternating row styling to a data cell."""
         cell.set_edgecolor(CELL_EDGE_COLOR)
         if row_index % 2 == 0:
             cell.set_facecolor(ALTERNATE_ROW_COLOR)
@@ -51,6 +66,7 @@ class PlottingEngine:
 
     @staticmethod
     def _apply_table_styling(table: Table) -> None:
+        """Apply consistent styling to a matplotlib table."""
         table.scale(1, 1.5)
         table.auto_set_font_size(False)
         table.set_fontsize(10)
@@ -64,6 +80,7 @@ class PlottingEngine:
     def _create_table(
         axes: Axes, dataframe: pd.DataFrame, relative_widths: list[float]
     ) -> None:
+        """Create and render a styled table on the given axes."""
         table = axes.table(
             cellText=dataframe.values.tolist(),
             colLabels=dataframe.columns.tolist(),
@@ -77,6 +94,7 @@ class PlottingEngine:
     def _calculate_figure_dimensions(
         column_widths: list[int], row_count: int
     ) -> Tuple[float, float]:
+        """Compute figure dimensions based on table size."""
         total_characters = sum(column_widths)
         figure_width = max(
             MINIMUM_FIGURE_INCHES,
@@ -87,6 +105,7 @@ class PlottingEngine:
 
     @staticmethod
     def _render_dataframe_as_table(dataframe: pd.DataFrame) -> Tuple[Figure, Axes]:
+        """Render a dataframe as a matplotlib table."""
         column_widths = PlottingEngine._calculate_column_widths(dataframe)
         total_characters = sum(column_widths)
         relative_widths = [width / total_characters for width in column_widths]
@@ -106,6 +125,7 @@ class PlottingEngine:
     def _attempt_plot(
         self, dataframe: pd.DataFrame, plot_parameters: Dict[str, Any], verbosity: int
     ) -> Tuple[Optional[Axes], bool]:
+        """Attempt to plot the dataframe using provided parameters."""
         try:
             axes = dataframe.plot(**plot_parameters)
             return axes, True
@@ -130,7 +150,7 @@ class PlottingEngine:
             plot_params (Dict): Kwargs for df.plot().
             should_plot (bool): LLM recommendation on whether to plot.
             show (bool): Whether to call plt.show().
-            verbose (int): Verbosity level.
+            verbosity (int): Verbosity level.
 
         Returns:
             Tuple[Axes, bool]: The axes object and a boolean
@@ -146,6 +166,7 @@ class PlottingEngine:
 
         if not plot_succeeded:
             _, axes = self._render_dataframe_as_table(dataframe)
+            should_plot = False
 
         if show:
             plt.show()
@@ -155,10 +176,10 @@ class PlottingEngine:
             logger.warning(
                 "LLM recommended not to plot this result; showing table instead."
             )
-
         return axes, should_plot
 
     def _extract_figure_from_axes(self, axes: Any) -> Optional[Figure]:
+        """Extract a matplotlib Figure object from axes or iterable of axes."""
         if hasattr(axes, "__iter__") and not isinstance(axes, Axes):
             for item in axes:
                 if hasattr(item, "get_figure"):
@@ -169,6 +190,7 @@ class PlottingEngine:
         return plt.gcf()
 
     def _close_figure(self, axes: Any) -> None:
+        """Close the matplotlib figure associated with the given axes."""
         try:
             figure = self._extract_figure_from_axes(axes)
             plt.close(figure)
@@ -177,8 +199,6 @@ class PlottingEngine:
 
 
 if __name__ == "__main__":
-    import numpy as np
-
     dataframe = pd.DataFrame(np.random.rand(10, 2), columns=["A", "B"])
     engine = PlottingEngine()
     logger.info("Testing plot engine...")

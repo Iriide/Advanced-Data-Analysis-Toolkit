@@ -51,7 +51,7 @@ python ./src/driver.py --plot-schema --log-file logs/app.log -vv
 ```
 
 ```txt
-usage: driver.py [-h] [--mode {cli,server}] [--question QUESTION] [--db-path DB_PATH] [--plot-schema] [--describe]
+usage: driver.py [-h] [--mode {cli,server}] [--question QUESTION] [--database-path DB_PATH] [--plot-schema] [--describe]
 
 LLM Data Visualizer Driver
 
@@ -59,7 +59,7 @@ options:
   -h, --help           show this help message and exit
   --mode {cli,server}  Run mode: 'cli' for visualizer, 'server' to run the server.
   --question QUESTION  Question to analyze. Does not apply in server mode.
-  --db-path DB_PATH    Path to database. Does not apply in server mode.
+  --database-path DB_PATH    Path to database. Does not apply in server mode.
   --plot-schema        Generate schema SVG. Does not apply in server mode.
   --describe           Describe (i.e. summarize) the database. Does not apply in server mode.
 ```

@@ -3,9 +3,35 @@ from unittest.mock import MagicMock
 
 
 def test_clean_markdown_block():
-    text = "```sql\nSELECT * FROM people;\n```"
-    cleaned = LLMClient.clean_markdown_block(text, "sql")
-    assert "SELECT * FROM people" in cleaned
+
+    def assert_cleaned(text: str, expected: str, block_type: str):
+        cleaned = LLMClient.clean_markdown_block(text, block_type)
+        assert expected == cleaned
+        # Also test without specifying block_type
+        cleaned = LLMClient.clean_markdown_block(text)
+        assert expected == cleaned
+
+    # Test with a valid SQL code block
+    assert_cleaned("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql")
+
+    # Test with a valid Python code block
+    assert_cleaned(
+        "```python\nprint('Hello, World!')\n```", "print('Hello, World!')", "python"
+    )
+
+    # Test with a regex pattern for SQL variants
+    assert_cleaned(
+        "```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"
+    )
+    assert_cleaned(
+        "```sqlite\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"
+    )
+
+    # Edge case: No code block delimiters
+    assert_cleaned("SELECT * FROM people;", "SELECT * FROM people;", "sql")
+
+    # Edge case: Mismatched code block delimiters
+    assert_cleaned("```sql\nSELECT * FROM people;", "SELECT * FROM people;", "sql")
 
 
 def test_generate_content_monkeypatch(monkeypatch):

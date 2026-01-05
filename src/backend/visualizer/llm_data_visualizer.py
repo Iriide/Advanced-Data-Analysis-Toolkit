@@ -5,10 +5,11 @@ import pandas as pd
 from pathlib import Path
 from typing import Any, Optional, Tuple
 from matplotlib.axes import Axes
+import textwrap
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
 from backend.visualizer.services.plotting_engine import PlottingEngine
-from backend.visualizer.services.logger import get_logger
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -22,7 +23,7 @@ class LLMDataVisualizer:
         self,
         database_path: Path,
         database_type: str = "sqlite",
-        model: str = "gemini-2.5-flash-lite",
+        model: str = "gemma-3-4b-it",
         plot_parameters_file_path: Optional[Path] = None,
     ):
         self._database_path = database_path
@@ -46,7 +47,7 @@ class LLMDataVisualizer:
             logger.warning("Config file not found at %s", path)
             return ""
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             plot_parameters = (
                 f.read()
                 .replace("\n        ", " - ")
@@ -75,82 +76,95 @@ class LLMDataVisualizer:
             return plot_parameters
 
     def _construct_sql_prompt(self, question: str, schema: str) -> str:
-        return f"""
+        """Construct an LLM prompt for generating an SQL query."""
+        return textwrap.dedent(
+            f"""
         ```db-schema
         {schema}
         ```
         # Instructions
 
-        Hello, knowing the schema, propose me a SQL query
-        that will answer this question: {question}
+        Based on the provided database schema, construct an SQL query
+        that answers the following question: "{question}".
 
-        Note that I use {self._database_type}.
-        Please make the result as informative and human readable as possible.
+        - The database type is {self._database_type}.
+        - Ensure the query is optimized and aggregates data where it makes sense.
+        - The result should be human-readable and provide meaningful insights.
+        - Avoid unnecessary complexity and ensure the query
+            is valid for the given database type.
 
-        Please provide ONLY the sql query, nothing else.
+        Please return ONLY the SQL query as plain text,
+        without any additional explanations or formatting.
         """
+        )
 
     def _construct_plot_prompt(self, question: str, dataframe: pd.DataFrame) -> str:
-        return f"""
+        """Construct an LLM prompt for generating dataframe plot parameters."""
+        return textwrap.dedent(
+            f"""
+
         ```df-plot-parameters
         {self._plot_parameters_text}
         ```
 
-        ```df-columns
-        {dataframe.columns.tolist()}
-        ```
-
-        ```df-index
-        {dataframe.index}
-        ```
-
-        ```df-head
-        {dataframe.head().to_string()}
+        ```df-metadata
+        Columns: {dataframe.columns.tolist()}
+        Index: {dataframe.index.tolist()}
+        Head: {dataframe.head().to_dict()}
         ```
 
         **Question**: {question}
 
         # Instructions
 
-        Hello, knowing the data and the question,
-        prepare me parameters dictionary (json)
-        that will be used for df.plot() as kwargs.
-        Only use parameters from the df-plot-parameters that are relevant.
+        Based on the provided data and question, generate a JSON dictionary
+        with parameters for `df.plot()` that are relevant and appropriate.
+        Ensure the plot is clear, informative, and visually appealing.
+        Consider using advanced plot types (e.g., stacked plots, subplots)
+        if the data has multiple columns.
 
-        The plot needs to be nice and informative.
-        If there is more than one column, the plot may be complex
-        (e.g. stacked plots, subplots, etc).
+        The JSON dictionary should include:
+        - Parameters for `df.plot()` as flat key-value pairs.
+        - A `should_plot` key with a boolean value indicating whether
+          plotting is suitable for this data.
 
-        Please provide ONLY the flat json, nothing else.
-
-        Additionally, add a 'should_plot' key with boolean value
-        indicating whether plotting is appropriate for this data.
+        Return ONLY the JSON dictionary as plain text,
+        without any additional explanations.
         """
+        )
 
     def _log_sql_query(self, sql_query: str) -> None:
+        """Log the generated SQL query, truncating if necessary."""
         if sql_query and len(sql_query) > SQL_QUERY_LOG_TRUNCATION_LENGTH:
             truncated = sql_query[:SQL_QUERY_LOG_TRUNCATION_LENGTH].replace("\n", " ")
-            logger.info("Generated SQL (truncated): %s...", truncated)
+            logger.info(
+                "Generated SQL (truncated): %s...\n", textwrap.indent(truncated, "  > ")
+            )
             logger.debug("Full generated SQL:\n%s", sql_query)
         else:
             logger.info("Generated SQL: %s", sql_query)
 
     def describe_database(self) -> pd.DataFrame:
+        """Return a summary description of the database schema."""
         return self._database_inspector.describe_database()
 
     def export_schema(self) -> str:
+        """Export the database schema as a textual representation."""
         return self._database_inspector.export_schema()
 
     def plot_schema(self) -> Optional[Path]:
+        """Generate and save a visual representation of the database schema."""
         return self._database_inspector.plot_schema()
 
     def _generate_sql_query(self, question: str, retry_count: int) -> str:
+        """Generate an SQL query from a natural language question."""
         schema = self._database_inspector.export_schema()
         prompt = self._construct_sql_prompt(question, schema)
         raw_response = self._llm_client.generate_content(prompt, retry_count)
-        return self._llm_client.clean_markdown_block(raw_response, "sql")
+        return self._llm_client.clean_markdown_block(raw_response, "sql(ite)?")
 
     def _execute_sql_query(self, sql_query: str) -> pd.DataFrame:
+        """Execute an SQL query and return the results as a DataFrame."""
         dataframe = self._database_inspector.execute_query(sql_query)
         logger.info(
             "Query returned %d rows and %d columns",
@@ -164,18 +178,36 @@ class LLMDataVisualizer:
         self, question: str, retry_count: int = 3
     ) -> pd.DataFrame:
         """Generates and executes a SQL query based on the user's question."""
-        sql_query = self._generate_sql_query(question, retry_count)
-        self._log_sql_query(sql_query)
-        return self._execute_sql_query(sql_query)
+        for attempt in range(retry_count, 0, -1):
+            try:
+                sql_query = self._generate_sql_query(question, retry_count)
+                self._log_sql_query(sql_query)
+                return self._execute_sql_query(sql_query)
+            except pd.errors.DatabaseError as e:
+                logger.error("SQL execution error: %s", e)
+                if attempt == 1:
+                    logger.error("All retries exhausted. Returning empty DataFrame.")
+                    raise e
+                logger.info(
+                    "Retrying SQL generation and execution (%d retries left)...",
+                    attempt - 1,
+                )
+        raise RuntimeError("Unexpected error in question_to_dataframe")
 
     def _generate_plot_parameters(
         self, question: str, dataframe: pd.DataFrame, retry_count: int
     ) -> str:
+        """Generate JSON plot parameters for a dataframe using the LLM."""
         prompt = self._construct_plot_prompt(question, dataframe)
         raw_response = self._llm_client.generate_content(prompt, retry_count)
         return self._llm_client.clean_markdown_block(raw_response, "json")
 
+    def _validate_plot_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        # @TODO: Implement validation logic
+        return parameters
+
     def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
+        """Parse plot parameters and plotting decision from JSON."""
         try:
             parameters = json.loads(json_string)
             should_plot = parameters.pop("should_plot", False)
@@ -185,10 +217,20 @@ class LLMDataVisualizer:
             return {}, False
 
     def question_to_plot(
-        self, question: str, retry_count: int = 3, show: bool = True, verbosity: int = 1
+        self,
+        question: str,
+        retry_count: int = 3,
+        show: bool = True,
+        verbosity: int = 1,
+        dataframe: Optional[pd.DataFrame] = None,
     ) -> Tuple[Optional[Axes], bool]:
         """Generates and displays a plot based on the user's question."""
-        dataframe = self.question_to_dataframe(question, retry_count)
+        dataframe = (
+            dataframe
+            if dataframe is not None
+            else self.question_to_dataframe(question, retry_count)
+        )
+
         logger.info("Dataframe shape: %s", dataframe.shape)
         logger.debug("Dataframe head:\n%s", dataframe.head().to_markdown())
 
@@ -205,5 +247,5 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
 
     logger.info("Initializing Visualizer...")
-    visualizer = LLMDataVisualizer(Path(arguments.db_path))
+    visualizer = LLMDataVisualizer(Path(arguments.database_path))
     logger.info(visualizer.export_schema()[:100])

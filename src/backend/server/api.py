@@ -1,23 +1,421 @@
+import os
+import numpy as np
+from io import BytesIO
 from pathlib import Path
+from typing import Optional, Any, Iterable, Dict, AsyncGenerator, Tuple
+import uuid
+import logging
+import textwrap
+import uvicorn
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
-from backend.visualizer.services.logger import get_logger
+import matplotlib.pyplot as plt
 
-logger = get_logger(__name__)
+"""API server for the Advanced Data Analysis Toolkit.
+
+This module exposes a small FastAPI app that serves the frontend
+and provides endpoints for describing the database, generating
+visualizations from natural-language questions, and updating
+settings (database path / model).
+"""
 
 
-class DummyServer:
-    def __init__(self) -> None:
-        database_path = Path("data/chinook.db")
-        logger.info("Server initialized. Loading visualizer for DB: %s", database_path)
-        self.viz = LLMDataVisualizer(database_path=database_path)
-        logger.debug("Visualizer instance created successfully")
+class SettingsPayload(BaseModel):
+    database_path: str
+    database_type: Optional[str] = "sqlite"
+    model: Optional[str] = None
 
-    def start(self) -> None:
-        logger.info("Server started (Dummy).")
-        logger.info("Visualizer loaded successfully.")
-        logger.info("DB Description Head:\n%s", self.viz.describe_database().head())
+
+class QuestionPayload(BaseModel):
+    question: str
+
+
+logger = logging.getLogger("uvicorn")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Run startup and shutdown hooks for the FastAPI application."""
+    logger.info("Server starting up...")
+    yield
+    # --- Shutdown Logic (Runs when server stops) ---
+    print("do widzenia")
+
+    # Adjust path logic relative to THIS file location
+    plots_dir = Path(__file__).parents[2] / "frontend/static/plots"
+
+    if plots_dir.exists() and plots_dir.is_dir():
+        for plot_file in plots_dir.iterdir():
+            if plot_file.is_file():
+                plot_file.unlink()
+        logger.info("All plots removed from %s", plots_dir)
+
+
+app = FastAPI(lifespan=lifespan, title="Advanced Data Analysis Toolkit API")
+
+# Allow requests from file:// or local frontend during development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve frontend static files (index.html + static/)
+# Resolve the frontend directory relative to this file: src/backend/server -> src
+ROOT_SRC = Path(__file__).resolve().parent.parent.parent
+FRONTEND_DIR = ROOT_SRC / "frontend"
+STATIC_DIR = FRONTEND_DIR / "static"
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    logger.info("Mounted static files from %s at /static", STATIC_DIR)
+else:
+    logger.warning(
+        "Static directory %s not found; not mounting static files", STATIC_DIR
+    )
+
+SUPPORTED_FORMATS = ("png", "svg", "pdf")
+
+
+@app.get("/", response_class=FileResponse)
+def serve_index() -> FileResponse:
+    """Serve the frontend `index.html` file.
+
+    Returns a `FileResponse` with the HTML content or raises
+    `HTTPException(404)` if the file cannot be found.
+    """
+    index_path = FRONTEND_DIR / "index.html"
+    if not index_path.exists():
+        logger.error("index.html not found at %s", index_path)
+        raise HTTPException(status_code=404, detail="index.html not found")
+    return FileResponse(str(index_path), media_type="text/html")
+
+
+# Global visualizer instance (simple single-process server)
+_VIZ: Optional[LLMDataVisualizer] = None
+
+
+def get_visualizer() -> LLMDataVisualizer:
+    """Return a singleton `LLMDataVisualizer` instance.
+
+    The visualizer is lazily initialized with a reasonable default
+    database path when first requested.
+    """
+    global _VIZ
+    if _VIZ is None:
+        default_db = Path("data/chinook.db")
+        logger.info("Initializing visualizer with default DB: %s", default_db)
+
+        model = os.environ.get("LLM_DATA_VISUALIZER_MODEL")
+        if not model:
+            logger.error(
+                "LLM_DATA_VISUALIZER_MODEL environment variable not set. Please set this variable to specify "
+                "the LLM model to use. Example: export LLM_DATA_VISUALIZER_MODEL='gpt-3.5-turbo'"
+            )
+        logger.info("Using LLM model: %s", model)
+
+        _VIZ = LLMDataVisualizer(
+            database_path=default_db,
+            model=model or "gemma-3-4b-it",
+        )
+    return _VIZ
+
+
+def fig_to_png_bytes(fig: Any) -> bytes:
+    """Serialize a Matplotlib figure to PNG bytes.
+
+    This is a thin wrapper around `fig_to_bytes(..., fmt='png')`.
+    """
+    return fig_to_bytes(fig, fmt="png")
+
+
+def ax_to_png_bytes(ax: Any) -> bytes:
+    """Serialize Axes (or iterable of Axes) to PNG bytes."""
+    fig = None
+    try:
+        if hasattr(ax, "get_figure"):
+            fig = ax.get_figure()
+        elif isinstance(ax, Iterable):
+            for item in ax:
+                if hasattr(item, "get_figure"):
+                    fig = item.get_figure()
+                    break
+        if fig is None:
+            fig = plt.gcf()
+        return fig_to_bytes(fig, fmt="png")
+    finally:
+        try:
+            plt.close(fig)
+        except Exception:
+            plt.close("all")
+
+
+def fig_to_bytes(fig: Any, fmt: str = "png") -> bytes:
+    """Serialize a Matplotlib figure to bytes in the requested format.
+
+    Supported formats: `png`, `svg`, `pdf`.
+    The function returns the raw bytes for the saved figure.
+    """
+    buf = BytesIO()
+    try:
+        fmt = (fmt or "png").lower()
+        if fmt not in ("png", "svg", "pdf"):
+            fmt = "png"
+        # Use tight bbox for all formats to avoid clipped labels/ticks in saved images.
+        # A small pad keeps things from being too cramped.
+        save_kwargs = {"format": fmt, "bbox_inches": "tight", "pad_inches": 0.05}
+
+        fig.savefig(buf, **save_kwargs)
+        buf.seek(0)
+        return buf.read()
+    finally:
+        try:
+            plt.close(fig)
+        except Exception:
+            pass
+
+
+def ax_to_bytes(ax: Any, fmt: str = "png") -> bytes:
+    """Accept Axes or an iterable of Axes and serialize to bytes.
+
+    Returns the serialized bytes in the requested `fmt`.
+    """
+    fig = None
+    try:
+        if hasattr(ax, "get_figure"):
+            fig = ax.get_figure()
+        elif isinstance(ax, Iterable):
+            for item in ax:
+                if hasattr(item, "get_figure"):
+                    fig = item.get_figure()
+                    break
+        if fig is None:
+            fig = plt.gcf()
+        return fig_to_bytes(fig, fmt=fmt)
+    finally:
+        try:
+            plt.close(fig)
+        except Exception:
+            plt.close("all")
+
+
+@app.post("/settings")
+def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
+    """Update database credentials / path and optionally model.
+
+    Example payload: { "database_path": "data/chinook.db", "database_type": "sqlite" }
+    Returns a dict confirming the new settings on success.
+    """
+    global _VIZ
+    try:
+        database_path = Path(payload.database_path)
+        model = payload.model
+        database_type = str(payload.database_type)
+        logger.info(
+            "Updating settings: db=%s, type=%s, model=%s",
+            database_path,
+            database_type,
+            model,
+        )
+        _VIZ = LLMDataVisualizer(
+            database_path=database_path,
+            database_type=database_type,
+            model=model or "gemma-3-4b-it",
+        )
+        return {"status": "ok", "database_path": str(database_path)}
+    except Exception as e:
+        logger.exception("Failed to update settings: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/schema/image")
+def get_schema_image() -> Response:
+    """Return an image representing the DB schema.
+
+    Tries to return an SVG when possible, otherwise returns a PNG image.
+    """
+    viz = get_visualizer()
+    try:
+        svg_path = viz.plot_schema()
+        if svg_path is not None and Path(svg_path).exists():
+            content = Path(svg_path).read_bytes()
+            return Response(content, media_type="image/svg+xml")
+
+        # Fallback: render schema text into a PNG image
+        schema_text = viz.export_schema()
+
+        fig = plt.figure(figsize=(8, 10))
+        fig.patch.set_visible(False)
+        plt.axis("off")
+        plt.text(0, 1, schema_text, fontsize=8, va="top", family="monospace")
+        png = fig_to_png_bytes(fig)
+        return Response(png, media_type="image/png")
+    except Exception as e:
+        logger.exception("Failed to generate schema image: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/describe")
+def get_database_description() -> JSONResponse:
+    """Return the database description as a JSON response.
+
+    The response content contains a `rows` key with an array of
+    table/column description objects.
+    """
+    viz = get_visualizer()
+    try:
+        df = viz.describe_database()
+        if df is None or df.empty:
+            return JSONResponse(content={"rows": []})
+        # Reset index so table/column become columns
+        df2 = df.reset_index()
+        records = df2.to_dict(orient="records")
+        return JSONResponse(content={"rows": records})
+    except Exception as e:
+        logger.exception("Failed to describe database: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _normalize_format(fmt: Optional[str], default: str = "svg") -> str:
+    """Normalize and validate the requested output format."""
+    fmt2 = (fmt or default).lower()
+    return fmt2 if fmt2 in SUPPORTED_FORMATS else default
+
+
+def _save_plot_bytes(img_bytes: bytes, fmt: str, plots_dir: Path) -> str:
+    """Save plot bytes under the static plots directory and return its URL path."""
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    ext = "svg" if fmt == "svg" else ("pdf" if fmt == "pdf" else "png")
+    filename = f"plot_{uuid.uuid4().hex}.{ext}"
+    (plots_dir / filename).write_bytes(img_bytes)
+    return f"/static/plots/{filename}"
+
+
+def _dataframe_to_json_payload(df: Optional[pd.DataFrame]) -> Dict[str, Any]:
+    """Convert a DataFrame into a JSON-serializable payload."""
+    if df is None or df.empty:
+        return {"columns": [], "rows": []}
+    df2 = df.reset_index()
+    rows = df2.replace({np.nan: None}).to_dict(orient="records")
+    return {"columns": df2.columns.tolist(), "rows": rows}
+
+
+def _get_axes_for_question(
+    viz: LLMDataVisualizer,
+    question: str,
+    retry_count: int = 3,
+    dataframe: Optional[pd.DataFrame] = None,
+) -> Tuple[Any, bool]:
+    """Generate plot axes for a question and return (axes, should_plot)."""
+    ax, should_plot = viz.question_to_plot(
+        question, retry_count=retry_count, show=False, verbosity=1, dataframe=dataframe
+    )
+    if ax is None:
+        raise RuntimeError("No axes generated for the question result")
+    return ax, bool(should_plot)
+
+
+@app.post("/question")
+def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
+    """Answer a question and return a plot URL plus tabular results as JSON."""
+    viz = get_visualizer()
+    try:
+        question = payload.question
+
+        df = viz.question_to_dataframe(question)
+        ax, should_plot = _get_axes_for_question(viz, question, 3, df)
+
+        fmt = _normalize_format(format, default="svg")
+        img_bytes = ax_to_bytes(ax, fmt=fmt)
+
+        image_url = _save_plot_bytes(img_bytes, fmt, plots_dir=STATIC_DIR / "plots")
+        df_payload = _dataframe_to_json_payload(df)
+
+        return JSONResponse(
+            content={
+                "df": df_payload,
+                "image_url": image_url,
+                "should_plot": should_plot,
+            }
+        )
+    except Exception as e:
+        logger.exception("Failed to generate plot for question: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/random-questions")
+def random_questions(count: int = 10) -> JSONResponse:
+    """Generate `count` random, interesting questions based on the DB schema.
+
+    Uses the internal LLM client to propose natural-language questions
+    that could be used to create visualizations. Returns a JSON
+    response with a `questions` list.
+    """
+    visualizer = get_visualizer()
+    try:
+        schema = visualizer.export_schema()
+        prompt = textwrap.dedent(
+            f"""
+        You are a data analyst assistant.
+        Based on the following database schema, generate {count} concise,
+        diverse, and visually interesting natural-language questions
+        that can be answered with data visualizations. Ensure the questions
+        involve joining multiple tables where applicable and focus on generating
+        plots that are clear and easy to interpret.
+
+        Limit the data (the predicted row count) in the questions
+        to ensure the visualizations are not overcrowded.
+        For example, restrict the results to the top 5 or 10 items, or use filters
+        to focus on specific subsets of the data.
+
+        Avoid questions that require too much information to be displayed
+        in a single plot, as the goal is to create readable and visually appealing
+        visualizations.
+
+        Schema:
+        {schema}
+
+        Provide exactly {count} questions, each on its own line, numbered sequentially.
+        Do NOT produce SQL or overly complex queries.
+        """
+        )
+
+        raw = visualizer._llm_client.generate_content(prompt, retry_count=3)
+        text = raw.strip().strip("`").strip()
+        lines = [
+            line.strip().lstrip("-").lstrip("0123456789. ")
+            for line in text.splitlines()
+            if line.strip()
+        ]
+        # keep non-empty and limit
+        questions = [line for line in lines if len(line) > 3][:count]
+        # fallback: if not enough, repeat a prompt to get simpler output
+        if len(questions) < count:
+            # try splitting by double newlines
+            parts = [p.strip() for p in text.split("\n\n") if p.strip()]
+            for p in parts:
+                for line in p.splitlines():
+                    s = line.strip()
+                    if s and s not in questions:
+                        questions.append(s)
+                    if len(questions) >= count:
+                        break
+                if len(questions) >= count:
+                    break
+
+        return JSONResponse(content={"questions": questions})
+    except Exception as e:
+        logger.exception("Failed to generate random questions: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
-    server = DummyServer()
-    server.start()
+    uvicorn.run("backend.server.api:app", host="0.0.0.0", port=8000, reload=False)

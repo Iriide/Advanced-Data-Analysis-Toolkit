@@ -1,13 +1,15 @@
 import os
-import time
+import re
 from google import genai
 from dotenv import load_dotenv
-from backend.visualizer.services.logger import get_logger
+from backend.utils.logger import get_logger
+from backend.visualizer.services.request_retrier import GeminiAPIRequestRetrier
+import argparse
+from backend.utils.logger import configure_logging
 
 logger = get_logger(__name__)
 
 API_KEY_ENVIRONMENT_VARIABLE = "GOOGLE_API_KEY"
-DEFAULT_RETRY_DELAY_SECONDS = 1
 
 
 class LLMClient:
@@ -15,13 +17,12 @@ class LLMClient:
     A generic client for interacting with the Google Gemini API.
 
     Attributes:
-        _model (str): The model identifier (e.g., "gemini-2.5-flash-lite").
+        _model (str): The model identifier (e.g., "gemma-3-4b-it").
         _client (genai.Client): The authenticated Gemini client instance.
     """
 
-    def __init__(
-        self, model: str = "gemini-2.5-flash-lite", load_environment: bool = True
-    ):
+    def __init__(self, model: str = "gemma-3-4b-it", load_environment: bool = True):
+        """Initialize the LLM client and load environment configuration."""
         if load_environment:
             load_dotenv()
 
@@ -30,8 +31,10 @@ class LLMClient:
 
         self._model = model
         self._client = genai.Client()
+        self._request_retrier = GeminiAPIRequestRetrier()
 
     def _call_api(self, prompt: str) -> str:
+        """Send a prompt directly to the Gemini API."""
         response = self._client.models.generate_content(
             model=self._model, contents=prompt
         )
@@ -43,59 +46,69 @@ class LLMClient:
 
         Args:
             prompt (str): The input text prompt.
-            retries (int): Number of times to retry on failure.
+            retry_count (int): Number of times to retry on failure.
 
         Returns:
             str: The raw text response from the LLM.
 
         Raises:
-            Exception: If the API call fails after all retries.
+            Exception: If the API call fails after all retry_count.
         """
-        for attempt in range(1, retry_count + 1):
-            try:
-                result = self._call_api(prompt)
-                logger.debug("LLM API call succeeded on attempt %d", attempt)
-                return result
-            except (ConnectionError, TimeoutError) as error:
-                logger.warning(
-                    "LLM API call failed on attempt %d/%d: %s",
-                    attempt,
-                    retry_count,
-                    error,
-                )
-                if attempt == retry_count:
-                    logger.exception(
-                        "LLM API call failed after %d attempts", retry_count
-                    )
-                    raise
-                time.sleep(DEFAULT_RETRY_DELAY_SECONDS)
-        return ""
+
+        retrier = self._request_retrier
+
+        retrier.reset_retries(retry_count)
+
+        try:
+
+            result = retrier.run(
+                self._call_api,
+                prompt,
+            )
+            logger.debug("LLM API call succeeded.")
+            return str(result)  # this is to satisfy type checker
+
+        except GeminiAPIRequestRetrier.SourceExhaustedError as e:
+            logger.error(f"LLM API call failed after {retry_count} retries: {e}")
+            raise
+        except RuntimeError as e:
+            logger.error(f"LLM API call failed with runtime error: {e}")
+            raise
 
     @staticmethod
-    def clean_markdown_block(text: str, block_type: str = "") -> str:
+    def clean_markdown_block(text: str, block_type: str | None = None) -> str:
         """
-        Utilities to strip markdown code blocks (e.g., ```sql ... ```).
+        Strips Markdown code block delimiters from a string.
 
         Args:
-            text (str): The text containing markdown.
-            block_type (str): The tag to look for (e.g., "sql", "json").
-                              If empty, cleans generic blocks.
-
-        Returns:
-            str: The cleaned string content.
+            text: The input string containing code (potentially inside markdown fences).
+            block_type: The expected language identifier (e.g., 'sql').
+                        Accepts regex patterns (e.g., 'sql(lite)?').
         """
-        pattern = f"```{block_type}"
-        if text.startswith(pattern):
-            parts = text.split(pattern, 1)
-            if len(parts) > 1:
-                return parts[1].strip().rstrip("```").strip()
-        return text.strip("`").strip()
+        if not text:
+            return ""
+
+        text = text.strip()
+
+        lang_pattern = block_type if block_type else r"\w*"
+
+        # Regex explanation:
+        # ^```                 : Starts with ```
+        # (?:{lang_pattern})?  : Optional non-capturing group for the language tag
+        # \n?                  : Optional newline after the tag
+        # (.*?)                : Capture group for the actual content (non-greedy)
+        # (?:```)?$            : Optional closing fence at the end of string
+        pattern = rf"^```(?:{lang_pattern})?\n?(?P<content>.*?)(?:```)?$"
+
+        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+
+        if match:
+            return match.group("content").strip()
+
+        return text
 
 
 if __name__ == "__main__":
-    import argparse
-    from backend.visualizer.services.logger import configure_logging
-
     parser = argparse.ArgumentParser(description="Test the LLMClient independently.")
     parser.add_argument("--prompt", type=str, default="Hello, are you working?")
     arguments = parser.parse_args()
