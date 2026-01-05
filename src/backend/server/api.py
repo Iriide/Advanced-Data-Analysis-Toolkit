@@ -124,7 +124,7 @@ def get_visualizer() -> LLMDataVisualizer:
 
         _VIZ = LLMDataVisualizer(
             database_path=default_db,
-            model=model,
+            model=model or "gemma-3-4b-it",
         )
     return _VIZ
 
