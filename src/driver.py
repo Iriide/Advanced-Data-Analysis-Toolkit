@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import uvicorn
 import cairosvg
 import subprocess
+import sys
 import threading
 from time import sleep
 from PIL import Image
@@ -132,7 +133,7 @@ def _open_browser(port: int, delay: int = 3) -> None:
         sleep(delay)
     browser_opened = subprocess.call(
         [
-            "sys.executable",
+            sys.executable,
             "-c",
             f"import webbrowser; webbrowser.open('http://localhost:{port}')",
         ],

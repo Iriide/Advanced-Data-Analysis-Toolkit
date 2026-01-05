@@ -28,15 +28,12 @@ coverage:
     uv run coverage report --fail-under=10
 
 serve:
-    dotenv \
     uv run python src/driver.py --mode server --open-browser
 
 serve-dev:
-    dotenv \
     uv run python src/driver.py --mode server --open-browser --dev
 
 serve-presentation:
     @echo "\033[31mPLEASE USE WITH CAUTION — THIS MODEL HAS SMALL LIMITS\033[0m"
     @sleep 5
-    dotenv \
     uv run python src/driver.py --mode server --open-browser --model gemini-2.5-flash
