@@ -36,12 +36,6 @@ jobs:
         run: |
           uv sync --all-extras
 
-      - name: Verify google package
-        run: |
-          uv run python -c "import google; import google.genai; print('google:', getattr(google,'__file__',None)); print('genai:', getattr(google.genai,'__file__',None)); print('genai spec:', google.genai.__spec__)"
-          uv run python -m pip show google google-genai || true
-          uv run python -m pip freeze | grep -E '^(google|google-genai|google-api-core|google-auth)=' || true
-
       - name: Run Lint
         run: just lint
 
