@@ -2,7 +2,7 @@
 	"name": "Python 3",
 	"image": "mcr.microsoft.com/devcontainers/python:2-3.12-bullseye",
 
-	"postCreateCommand": "pip install uv && uv sync --all-extras",
+	"postCreateCommand": "sudo sh -c \"curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin\" && pip install uv && uv sync --all-extras",
 
 	"customizations": {
 		"vscode": {
@@ -14,5 +14,8 @@
 				"ms-azuretools.vscode-docker"
 			]
 		}
-	}
+	},
+    "features": {
+        "ghcr.io/prulloac/devcontainer-features/pre-commit:1.0.3": {}
+    }
 }
