@@ -16,6 +16,11 @@
 		}
 	},
 	"features": {
-		"ghcr.io/prulloac/devcontainer-features/pre-commit:1.0.3": {}
-	}
+		"ghcr.io/prulloac/devcontainer-features/pre-commit:1.0.3": {},
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "version": "latest",
+            "moby": true
+        }
+    },
+    "forwardPorts": [8000]
 }
