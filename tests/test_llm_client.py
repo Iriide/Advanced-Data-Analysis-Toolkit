@@ -15,6 +15,11 @@ def llm_client_class(llm_module):
     return llm_module.LLMClient
 
 
+@pytest.fixture
+def fake_load_dotenv():
+    return
+
+
 # -------------------------
 # clean_markdown_block tests
 # -------------------------
@@ -188,9 +193,6 @@ def test_generate_content_calls_retrier_with_call_api_and_prompt(
 
 def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj):
     class DummyClient:
-        pass
-
-    def fake_load_dotenv():
         pass
 
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
