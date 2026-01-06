@@ -26,20 +26,6 @@ class DatabaseInspector:
             f"sqlite:///{self._database_path}" if database_type == "sqlite" else None
         )
 
-    def create_connection(self) -> sqlite3.Connection:
-        """Returns a raw sqlite3 connection."""
-        return sqlite3.connect(self._database_path)
-
-    def execute_query(self, query: str) -> pd.DataFrame:
-        """
-        Executes a SQL query and returns the result as a DataFrame.
-        """
-        connection = self.create_connection()
-        try:
-            return pd.read_sql(query, con=connection)
-        finally:
-            connection.close()
-
     def _get_numeric_column_statistics(
         self, cursor: sqlite3.Cursor, table_name: str, column_name: str
     ) -> dict[str, Optional[float]]:
@@ -89,35 +75,15 @@ class DatabaseInspector:
             return self._get_numeric_column_statistics(cursor, table_name, column_name)
         return self._get_categorical_column_statistics(cursor, table_name, column_name)
 
-    def describe_table(self, table_name: str) -> pd.DataFrame:
-        """Generates statistical description of a specific table."""
-        connection = self.create_connection()
-        cursor = connection.cursor()
-        cursor.execute(f"PRAGMA table_info({table_name});")
-        columns = cursor.fetchall()
-
-        statistics = {}
-        for _, column_name, data_type, *_ in columns:
-            statistics[column_name] = self._get_column_statistics(
-                cursor, table_name, column_name, data_type
-            )
-
-        connection.close()
-        result = pd.DataFrame(statistics).T
-        result.insert(0, "dtype", np.array(columns)[:, 2])
-        return result
-
     def _get_table_names(self) -> list[str]:
         """Return a list of user-defined table names in the database."""
-        connection = self.create_connection()
-        try:
+
+        with self.create_connection() as connection:
             cursor = connection.cursor()
             cursor.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
             )
             return [row[0] for row in cursor.fetchall()]
-        finally:
-            connection.close()
 
     def _create_table_description_with_index(self, table_name: str) -> pd.DataFrame:
         """Create a table description DataFrame with a hierarchical index."""
@@ -127,23 +93,6 @@ class DatabaseInspector:
         table_description = table_description.swaplevel(0, 1)
         table_description.index.names = ["table", "column"]
         return table_description
-
-    def describe_database(self) -> pd.DataFrame:
-        """Generates statistical description for the entire database."""
-        table_names = self._get_table_names()
-        table_descriptions = [
-            self._create_table_description_with_index(name) for name in table_names
-        ]
-        return pd.concat(table_descriptions) if table_descriptions else pd.DataFrame()
-
-    def export_schema(self) -> str:
-        """Returns the DDL (Create Table statements) for the database."""
-        connection = self.create_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table'")
-        schema_statements = [row[0] for row in cursor.fetchall() if row[0]]
-        connection.close()
-        return "\n".join(schema_statements)
 
     def _configure_schema_graph_nodes(self, graph: Any) -> None:
         """Apply visual styling to schema graph nodes."""
@@ -182,6 +131,50 @@ class DatabaseInspector:
             temporary_directory / f"{self._database_type}-schema-{uuid.uuid4().hex}.svg"
         )
 
+    def create_connection(self) -> sqlite3.Connection:
+        """Returns a raw sqlite3 connection."""
+        return sqlite3.connect(self._database_path)
+
+    def execute_query(self, query: str) -> pd.DataFrame:
+        """
+        Executes a SQL query and returns the result as a DataFrame.
+        """
+        with self.create_connection() as connection:
+            return pd.read_sql(query, con=connection)
+
+    def describe_table(self, table_name: str) -> pd.DataFrame:
+        """Generates statistical description of a specific table."""
+        with self.create_connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(f"PRAGMA table_info({table_name});")
+            columns = cursor.fetchall()
+
+            statistics = {}
+            for _, column_name, data_type, *_ in columns:
+                statistics[column_name] = self._get_column_statistics(
+                    cursor, table_name, column_name, data_type
+                )
+
+        result = pd.DataFrame(statistics).T
+        result.insert(0, "dtype", np.array(columns)[:, 2])
+        return result
+
+    def describe_database(self) -> pd.DataFrame:
+        """Generates statistical description for the entire database."""
+        table_names = self._get_table_names()
+        table_descriptions = [
+            self._create_table_description_with_index(name) for name in table_names
+        ]
+        return pd.concat(table_descriptions) if table_descriptions else pd.DataFrame()
+
+    def export_schema(self) -> str:
+        """Returns the DDL (Create Table statements) for the database."""
+        with self.create_connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table'")
+            schema_statements = [row[0] for row in cursor.fetchall() if row[0]]
+        return "\n".join(schema_statements)
+
     def plot_schema(self) -> Optional[Path]:
         """
         Generates an SVG graph of the schema.
@@ -211,5 +204,5 @@ if __name__ == "__main__":
     logger = get_logger(__name__)
 
     inspector = DatabaseInspector(Path(arguments.db_path))
-    logger.info("Schema Snippet:\n%s", inspector.export_schema()[:200])
-    logger.info("\nStats Snippet:\n%s", inspector.describe_database().head())
+    logger.info(f"Schema Snippet:\n{inspector.export_schema()[:200]}")
+    logger.info(f"\nStats Snippet:\n{inspector.describe_database().head()}")

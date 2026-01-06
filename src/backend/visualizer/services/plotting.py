@@ -11,12 +11,15 @@ except Exception:
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from typing import Dict, Any, Tuple, Optional, cast
+from typing import Dict, Any, Tuple, Optional
+from collections.abc import Iterable
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.table import Table, Cell
 from backend.utils.logger import get_logger
 import numpy as np
+import tempfile
+from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -131,7 +134,7 @@ class PlottingEngine:
             return axes, True
         except (TypeError, ValueError, KeyError) as error:
             if verbosity > 0:
-                logger.warning("Plotting failed: %s. Falling back to table.", error)
+                logger.warning(f"Plotting failed: {error}. Falling back to table.")
             return None, False
 
     def plot_data(
@@ -170,7 +173,6 @@ class PlottingEngine:
 
         if show:
             plt.show()
-            self._close_figure(axes)
 
         if not should_plot and verbosity > 0:
             logger.warning(
@@ -178,24 +180,45 @@ class PlottingEngine:
             )
         return axes, should_plot
 
-    def _extract_figure_from_axes(self, axes: Any) -> Optional[Figure]:
-        """Extract a matplotlib Figure object from axes or iterable of axes."""
-        if hasattr(axes, "__iter__") and not isinstance(axes, Axes):
-            for item in axes:
-                if hasattr(item, "get_figure"):
-                    return cast(Figure, item.get_figure())
-            return plt.gcf()
-        if hasattr(axes, "get_figure"):
-            return cast(Figure, axes.get_figure())
-        return plt.gcf()
 
-    def _close_figure(self, axes: Any) -> None:
-        """Close the matplotlib figure associated with the given axes."""
-        try:
-            figure = self._extract_figure_from_axes(axes)
-            plt.close(figure)
-        except (AttributeError, TypeError):
-            plt.close("all")
+def _extract_figure(axes: Any) -> Optional[Figure]:
+    fig = None
+    if isinstance(axes, Axes):
+        fig = axes.get_figure()
+    elif isinstance(axes, Iterable):
+        # Handle cases like plt.subplots(2, 2) which return a NumPy array
+        for item in np.asarray(axes).flatten():
+            if isinstance(item, (Axes, Iterable)):
+                target = list(item)[0] if isinstance(item, Iterable) else item
+                fig = target.get_figure()
+    if not isinstance(fig, Figure):
+        raise TypeError("Could not extract Figure from the provided axes.")
+    return fig
+
+
+def save_plot(
+    axes: Any,
+    fmt: str = "svg",
+    plots_dir: Optional[Path] = None,
+) -> Optional[Path]:
+    """Save the plot associated with the given axes in the specified format."""
+    if plots_dir is None:
+        plots_dir = Path(tempfile.gettempdir())
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plot_path = plots_dir / f"plot_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{fmt}"
+    fig = _extract_figure(axes)
+    if fig is None:
+        logger.error("No figure found to save.")
+        return None
+    if fmt == "svg":
+        fig.savefig(plot_path, format="svg")
+    elif fmt == "png":
+        fig.savefig(plot_path, format="png", dpi=300)
+    else:
+        logger.error(f"Unsupported format: {fmt}")
+        return None
+    logger.info(f"Plot saved to: {plot_path}")
+    return plot_path
 
 
 if __name__ == "__main__":

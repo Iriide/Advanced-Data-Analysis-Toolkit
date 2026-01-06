@@ -8,7 +8,7 @@ from matplotlib.axes import Axes
 import textwrap
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
-from backend.visualizer.services.plotting_engine import PlottingEngine
+from backend.visualizer.services.plotting import PlottingEngine
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -44,7 +44,7 @@ class LLMDataVisualizer:
             path = DEFAULT_PLOT_PARAMETERS_PATH
 
         if not path.exists():
-            logger.warning("Config file not found at %s", path)
+            logger.warning(f"Config file not found at {path}")
             return ""
 
         with open(path, "r", encoding="utf-8") as f:
@@ -138,23 +138,11 @@ class LLMDataVisualizer:
         if sql_query and len(sql_query) > SQL_QUERY_LOG_TRUNCATION_LENGTH:
             truncated = sql_query[:SQL_QUERY_LOG_TRUNCATION_LENGTH].replace("\n", " ")
             logger.info(
-                "Generated SQL (truncated): %s...\n", textwrap.indent(truncated, "  > ")
+                f"Generated SQL (truncated): {textwrap.indent(truncated, '  > ')}...\n"
             )
-            logger.debug("Full generated SQL:\n%s", sql_query)
+            logger.debug(f"Full generated SQL:\n{sql_query}")
         else:
-            logger.info("Generated SQL: %s", sql_query)
-
-    def describe_database(self) -> pd.DataFrame:
-        """Return a summary description of the database schema."""
-        return self._database_inspector.describe_database()
-
-    def export_schema(self) -> str:
-        """Export the database schema as a textual representation."""
-        return self._database_inspector.export_schema()
-
-    def plot_schema(self) -> Optional[Path]:
-        """Generate and save a visual representation of the database schema."""
-        return self._database_inspector.plot_schema()
+            logger.info(f"Generated SQL: {sql_query}")
 
     def _generate_sql_query(self, question: str, retry_count: int) -> str:
         """Generate an SQL query from a natural language question."""
@@ -171,8 +159,38 @@ class LLMDataVisualizer:
             dataframe.shape[0],
             dataframe.shape[1],
         )
-        logger.debug("Result preview:\n%s", dataframe.head().to_markdown())
+        logger.debug(f"Result preview:\n{dataframe.head().to_markdown()}")
         return dataframe
+
+    def _generate_plot_parameters(
+        self, question: str, dataframe: pd.DataFrame, retry_count: int
+    ) -> str:
+        """Generate JSON plot parameters for a dataframe using the LLM."""
+        prompt = self._construct_plot_prompt(question, dataframe)
+        raw_response = self._llm_client.generate_content(prompt, retry_count)
+        return self._llm_client.clean_markdown_block(raw_response, "json")
+
+    def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
+        """Parse plot parameters and plotting decision from JSON."""
+        try:
+            parameters = json.loads(json_string)
+            should_plot = parameters.pop("should_plot", False)
+            return parameters, should_plot
+        except json.JSONDecodeError:
+            logger.error(f"Failed to decode JSON: {json_string}")
+            return {}, False
+
+    def describe_database(self) -> pd.DataFrame:
+        """Return a summary description of the database schema."""
+        return self._database_inspector.describe_database()
+
+    def export_schema(self) -> str:
+        """Export the database schema as a textual representation."""
+        return self._database_inspector.export_schema()
+
+    def plot_schema(self) -> Optional[Path]:
+        """Generate and save a visual representation of the database schema."""
+        return self._database_inspector.plot_schema()
 
     def question_to_dataframe(
         self, question: str, retry_count: int = 3
@@ -184,37 +202,14 @@ class LLMDataVisualizer:
                 self._log_sql_query(sql_query)
                 return self._execute_sql_query(sql_query)
             except pd.errors.DatabaseError as e:
-                logger.error("SQL execution error: %s", e)
+                logger.error(f"SQL execution error: {e}")
                 if attempt == 1:
                     logger.error("All retries exhausted. Returning empty DataFrame.")
                     raise e
                 logger.info(
-                    "Retrying SQL generation and execution (%d retries left)...",
-                    attempt - 1,
+                    f"Retrying SQL generation and execution ({attempt - 1} retries left)..."
                 )
         raise RuntimeError("Unexpected error in question_to_dataframe")
-
-    def _generate_plot_parameters(
-        self, question: str, dataframe: pd.DataFrame, retry_count: int
-    ) -> str:
-        """Generate JSON plot parameters for a dataframe using the LLM."""
-        prompt = self._construct_plot_prompt(question, dataframe)
-        raw_response = self._llm_client.generate_content(prompt, retry_count)
-        return self._llm_client.clean_markdown_block(raw_response, "json")
-
-    def _validate_plot_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
-        # @TODO: Implement validation logic
-        return parameters
-
-    def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
-        """Parse plot parameters and plotting decision from JSON."""
-        try:
-            parameters = json.loads(json_string)
-            should_plot = parameters.pop("should_plot", False)
-            return parameters, should_plot
-        except json.JSONDecodeError:
-            logger.error("Failed to decode JSON: %s", json_string)
-            return {}, False
 
     def question_to_plot(
         self,
@@ -231,8 +226,8 @@ class LLMDataVisualizer:
             else self.question_to_dataframe(question, retry_count)
         )
 
-        logger.info("Dataframe shape: %s", dataframe.shape)
-        logger.debug("Dataframe head:\n%s", dataframe.head().to_markdown())
+        logger.info(f"Dataframe shape: {dataframe.shape}")
+        logger.debug(f"Dataframe head:\n{dataframe.head().to_markdown()}")
 
         json_string = self._generate_plot_parameters(question, dataframe, retry_count)
         parameters, should_plot = self._parse_plot_parameters(json_string)

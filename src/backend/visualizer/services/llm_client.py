@@ -115,6 +115,6 @@ if __name__ == "__main__":
     configure_logging()
 
     client = LLMClient()
-    logger.info("Sending prompt: %s", arguments.prompt)
+    logger.info(f"Sending prompt: {arguments.prompt}")
     response = client.generate_content(arguments.prompt)
-    logger.info("Response:\n%s", response)
+    logger.info(f"Response:\n{response}")
