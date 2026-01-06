@@ -207,7 +207,9 @@ def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj, fake_load_do
     return client
 
 
-def test_generate_content_raises_source_exhausted_and_logs(monkeypatch, llm_module, fake_load_dotenv):
+def test_generate_content_raises_source_exhausted_and_logs(
+    monkeypatch, llm_module, fake_load_dotenv
+):
     class RetrierStub:
         def __init__(self):
             self.reset_arg = None
@@ -222,7 +224,9 @@ def test_generate_content_raises_source_exhausted_and_logs(monkeypatch, llm_modu
     errors = []
     monkeypatch.setattr(llm_module.logger, "error", lambda msg: errors.append(msg))
 
-    client = _make_client_with_retrier(monkeypatch, llm_module, retrier, fake_load_dotenv)
+    client = _make_client_with_retrier(
+        monkeypatch, llm_module, retrier, fake_load_dotenv
+    )
 
     with pytest.raises(llm_module.GeminiAPIRequestRetrier.SourceExhaustedError):
         client.generate_content("hi", retry_count=3)
@@ -231,7 +235,9 @@ def test_generate_content_raises_source_exhausted_and_logs(monkeypatch, llm_modu
     assert any("LLM API call failed after 3 retries" in m for m in errors)
 
 
-def test_generate_content_raises_runtime_error_and_logs(monkeypatch, llm_module, fake_load_dotenv):
+def test_generate_content_raises_runtime_error_and_logs(
+    monkeypatch, llm_module, fake_load_dotenv
+):
     class RetrierStub:
         def __init__(self):
             self.reset_arg = None
@@ -246,7 +252,9 @@ def test_generate_content_raises_runtime_error_and_logs(monkeypatch, llm_module,
     errors = []
     monkeypatch.setattr(llm_module.logger, "error", lambda msg: errors.append(msg))
 
-    client = _make_client_with_retrier(monkeypatch, llm_module, retrier, fake_load_dotenv)
+    client = _make_client_with_retrier(
+        monkeypatch, llm_module, retrier, fake_load_dotenv
+    )
 
     with pytest.raises(RuntimeError):
         client.generate_content("hi", retry_count=5)
