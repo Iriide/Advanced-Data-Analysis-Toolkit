@@ -1,6 +1,5 @@
 import importlib
 from unittest.mock import MagicMock
-
 import pytest
 
 MODULE_PATH = "backend.visualizer.services.llm_client"
@@ -16,6 +15,11 @@ def llm_client_class(llm_module):
     return llm_module.LLMClient
 
 
+@pytest.fixture
+def fake_load_dotenv():
+    return
+
+
 # -------------------------
 # clean_markdown_block tests
 # -------------------------
@@ -24,7 +28,7 @@ def llm_client_class(llm_module):
 def test_clean_markdown_block_strips_fences_and_lang_tag(llm_client_class):
     def assert_cleaned(text: str, expected: str, block_type: str):
         cleaned = llm_client_class.clean_markdown_block(text, block_type)
-        assert cleaned == expected
+        assert expected == cleaned
         # Also test without specifying block_type
         cleaned = llm_client_class.clean_markdown_block(text)
         assert expected == cleaned
@@ -72,19 +76,21 @@ def test_clean_markdown_block_whitespace_only_becomes_empty_after_strip(
 # -------------------------
 
 
-def test_init_calls_load_dotenv_when_enabled(monkeypatch, llm_module):
+def test_init_initializes_dependencies_when_load_environment_enabled(
+    monkeypatch, llm_module
+):
     called = {"count": 0}
     retrier_count = {"count": 0}
 
     def fake_load_dotenv():
         called["count"] += 1
 
-    class DummyClient:
-        pass
-
     class DummyRetrier:
         def __init__(self):
             retrier_count["count"] += 1
+
+    class DummyClient:
+        pass
 
     monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
@@ -97,12 +103,20 @@ def test_init_calls_load_dotenv_when_enabled(monkeypatch, llm_module):
     assert retrier_count["count"] == 1
 
 
-def test_init_logs_warning_when_api_key_missing(monkeypatch, llm_module):
+def test_init_logs_warning_when_api_key_missing(
+    monkeypatch, llm_module, fake_load_dotenv
+):
+    class DummyRetrier:
+        pass
+
+    class DummyClient:
+        pass
+
     monkeypatch.delenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, raising=False)
 
-    monkeypatch.setattr(llm_module, "load_dotenv", lambda: None)
-    monkeypatch.setattr(llm_module.genai, "Client", lambda: object())
-    monkeypatch.setattr(llm_module, "GeminiAPIRequestRetrier", lambda: object())
+    monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
+    monkeypatch.setattr(llm_module.genai, "Client", DummyClient)
+    monkeypatch.setattr(llm_module, "GeminiAPIRequestRetrier", DummyRetrier)
 
     warnings = []
     monkeypatch.setattr(llm_module.logger, "warning", lambda msg: warnings.append(msg))
@@ -117,14 +131,13 @@ def test_init_logs_warning_when_api_key_missing(monkeypatch, llm_module):
 # -------------------------
 
 
-def test_generate_content_returns_mocked_response(monkeypatch, llm_module):
+def test_generate_content_returns_mocked_response(
+    monkeypatch, llm_module, fake_load_dotenv
+):
     class FakeGenAIClient:
         def __init__(self, *args, **kwargs):
             self.models = MagicMock()
             self.models.generate_content.return_value.text = "Mocked Response"
-
-    def fake_load_dotenv():
-        pass
 
     monkeypatch.setattr(llm_module.genai, "Client", FakeGenAIClient)
     monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
@@ -135,7 +148,7 @@ def test_generate_content_returns_mocked_response(monkeypatch, llm_module):
 
 
 def test_generate_content_calls_retrier_with_call_api_and_prompt(
-    monkeypatch, llm_module
+    monkeypatch, llm_module, fake_load_dotenv
 ):
     class FakeGenAIClient:
         def __init__(self, *args, **kwargs):
@@ -153,9 +166,6 @@ def test_generate_content_calls_retrier_with_call_api_and_prompt(
         def run(self, fn, prompt):
             self.run_called_with = (fn, prompt)
             return fn(prompt)
-
-    def fake_load_dotenv():
-        return
 
     retrier = RetrierStub()
 
@@ -182,9 +192,12 @@ def test_generate_content_calls_retrier_with_call_api_and_prompt(
 
 
 def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj):
+    class DummyClient:
+        pass
+
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
-    monkeypatch.setattr(llm_module, "load_dotenv", lambda: None)
-    monkeypatch.setattr(llm_module.genai, "Client", lambda: object())
+    monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
+    monkeypatch.setattr(llm_module.genai, "Client", DummyClient)
 
     client = llm_module.LLMClient(load_environment=False)
     client._request_retrier = retrier_obj
