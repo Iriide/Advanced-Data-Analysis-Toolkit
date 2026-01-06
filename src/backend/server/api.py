@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
+from backend.visualizer.services.plotting import save_plot
 
 # --- Constants ---
 DEFAULT_DB_PATH = Path("data/chinook.db")
@@ -89,7 +90,7 @@ else:
         f"Static directory {STATIC_DIR} not found; not mounting static files"
     )
 
-VIZUALIZER: Optional[LLMDataVisualizer] = None
+VISUALIZER: Optional[LLMDataVisualizer] = None
 
 # --- Helper functions ---
 
@@ -100,43 +101,18 @@ def _normalize_image_format(fmt: Optional[str], default: str = "svg") -> str:
     return fmt2 if fmt2 in SUPPORTED_FORMATS else default
 
 
-# def _serialize_figure(fig: Any, fmt: str = "png") -> bytes:
-#     """Serialize a Matplotlib figure to bytes in the requested format."""
-#     fmt = fmt.lower()
-#     if fmt not in SUPPORTED_FORMATS:
-#         fmt = "png"
-#     save_kwargs = {"format": fmt, "bbox_inches": "tight", "pad_inches": 0.05}
-
-#     with BytesIO() as buf:
-#         fig.savefig(buf, **save_kwargs)
-#         buf.seek(0)
-#         image_bytes = buf.getvalue()
-
-#     plt.close(fig)
-#     return image_bytes
-
-
-# def _save_plot_bytes(image_bytes: bytes, fmt: str, plots_dir: Path) -> str:
-#     """Save plot bytes under the static plots directory and return its URL path."""
-#     plots_dir.mkdir(parents=True, exist_ok=True)
-#     ext = fmt if fmt in SUPPORTED_FORMATS else "png"
-#     filename = f"plot_{uuid.uuid4().hex}.{ext}"
-#     (plots_dir / filename).write_bytes(image_bytes)
-#     return f"/static/plots/{filename}"
-
-
 def _plot_question(
-    vizualizer: LLMDataVisualizer,
+    visualizer: LLMDataVisualizer,
     question: str,
     retry_count: int = 3,
     dataframe: Optional[pd.DataFrame] = None,
     fmt: str = "svg",
 ) -> Tuple[Any, bool]:
     """Generate plot axes for a question and return (axes, should_plot)."""
-    ax, should_plot = vizualizer.question_to_plot(
+    ax, should_plot = visualizer.question_to_plot(
         question, retry_count=retry_count, show=False, verbosity=1, dataframe=dataframe
     )
-    image_url = vizualizer.save_plot(ax, fmt=fmt, plots_dir=STATIC_DIR / "plots")
+    image_url = save_plot(ax, fmt=fmt, plots_dir=STATIC_DIR / "plots")
 
     if ax is None:
         raise RuntimeError("No axes generated for the question result")
@@ -154,8 +130,8 @@ def _dataframe_to_json(df: Optional[pd.DataFrame]) -> Dict[str, Any]:
 
 def _get_visualizer() -> LLMDataVisualizer:
     """Return a singleton `LLMDataVisualizer` instance, lazily initialized."""
-    global VIZUALIZER
-    if VIZUALIZER is None:
+    global VISUALIZER
+    if VISUALIZER is None:
         model = os.environ.get("LLM_DATA_VISUALIZER_MODEL")
         if not model:
             logger.error(
@@ -165,11 +141,11 @@ def _get_visualizer() -> LLMDataVisualizer:
         logger.info(
             f"Initializing visualizer with DB: {DEFAULT_DB_PATH}, model: {model or DEFAULT_MODEL}"
         )
-        VIZUALIZER = LLMDataVisualizer(
+        VISUALIZER = LLMDataVisualizer(
             database_path=DEFAULT_DB_PATH,
             model=model or DEFAULT_MODEL,
         )
-    return VIZUALIZER
+    return VISUALIZER
 
 
 # --- API Endpoints ---
@@ -188,7 +164,7 @@ def serve_index() -> FileResponse:
 @app.post("/settings")
 def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
     """Update database credentials / path and optionally model."""
-    global VIZUALIZER
+    global VISUALIZER
 
     database_path = Path(payload.database_path)
     model = payload.model
@@ -196,7 +172,7 @@ def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
     logger.info(
         f"Updating settings: db={database_path}, type={database_type}, model={model}",
     )
-    VIZUALIZER = LLMDataVisualizer(
+    VISUALIZER = LLMDataVisualizer(
         database_path=database_path,
         database_type=database_type,
         model=model or DEFAULT_MODEL,
@@ -207,8 +183,8 @@ def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
 @app.get("/schema/image")
 def get_schema_image() -> Response:
     """Return an image representing the DB schema."""
-    vizualizer = _get_visualizer()
-    svg_path = vizualizer.plot_schema()
+    visualizer = _get_visualizer()
+    svg_path = visualizer.plot_schema()
     if svg_path and Path(svg_path).exists():
         content = Path(svg_path).read_bytes()
         return Response(content, media_type="image/svg+xml")
@@ -220,8 +196,8 @@ def get_schema_image() -> Response:
 @app.get("/describe")
 def get_database_description() -> JSONResponse:
     """Return the database description as a JSON response."""
-    vizualizer = _get_visualizer()
-    df = vizualizer.describe_database()
+    visualizer = _get_visualizer()
+    df = visualizer.describe_database()
     if df is None or df.empty:
         return JSONResponse(content={"rows": []})
     records = df.reset_index().to_dict(orient="records")
@@ -231,18 +207,18 @@ def get_database_description() -> JSONResponse:
 @app.post("/question")
 def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
     """Answer a question and return a plot URL plus tabular results as JSON."""
-    vizualizer = _get_visualizer()
+    visualizer = _get_visualizer()
     question = payload.question
     fmt = _normalize_image_format(format, default="svg")
 
-    df = vizualizer.question_to_dataframe(question)
-    image_url, should_plot = _plot_question(vizualizer, question, 3, df, fmt)
+    df = visualizer.question_to_dataframe(question)
+    image_url, should_plot = _plot_question(visualizer, question, 3, df, fmt)
     df_json = _dataframe_to_json(df)
 
     return JSONResponse(
         content={
             "df": df_json,
-            "image_url": image_url,
+            "image_url": str(image_url),
             "should_plot": should_plot,
         }
     )

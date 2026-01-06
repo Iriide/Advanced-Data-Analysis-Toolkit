@@ -1,5 +1,5 @@
 import pandas as pd
-from backend.visualizer.services.plotting_engine import PlottingEngine
+from backend.visualizer.services.plotting import PlottingEngine
 
 
 def test_plot_data_returns_axes():

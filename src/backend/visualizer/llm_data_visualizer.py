@@ -6,10 +6,9 @@ from pathlib import Path
 from typing import Any, Optional, Tuple
 from matplotlib.axes import Axes
 import textwrap
-import tempfile
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
-from backend.visualizer.services.plotting_engine import PlottingEngine
+from backend.visualizer.services.plotting import PlottingEngine
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -45,7 +44,7 @@ class LLMDataVisualizer:
             path = DEFAULT_PLOT_PARAMETERS_PATH
 
         if not path.exists():
-            logger.warning("Config file not found at %s", path)
+            logger.warning(f"Config file not found at {path}")
             return ""
 
         with open(path, "r", encoding="utf-8") as f:
@@ -139,11 +138,11 @@ class LLMDataVisualizer:
         if sql_query and len(sql_query) > SQL_QUERY_LOG_TRUNCATION_LENGTH:
             truncated = sql_query[:SQL_QUERY_LOG_TRUNCATION_LENGTH].replace("\n", " ")
             logger.info(
-                "Generated SQL (truncated): %s...\n", textwrap.indent(truncated, "  > ")
+                f"Generated SQL (truncated): {textwrap.indent(truncated, '  > ')}...\n"
             )
-            logger.debug("Full generated SQL:\n%s", sql_query)
+            logger.debug(f"Full generated SQL:\n{sql_query}")
         else:
-            logger.info("Generated SQL: %s", sql_query)
+            logger.info(f"Generated SQL: {sql_query}")
 
     def _generate_sql_query(self, question: str, retry_count: int) -> str:
         """Generate an SQL query from a natural language question."""
@@ -160,7 +159,7 @@ class LLMDataVisualizer:
             dataframe.shape[0],
             dataframe.shape[1],
         )
-        logger.debug("Result preview:\n%s", dataframe.head().to_markdown())
+        logger.debug(f"Result preview:\n{dataframe.head().to_markdown()}")
         return dataframe
 
     def _generate_plot_parameters(
@@ -178,7 +177,7 @@ class LLMDataVisualizer:
             should_plot = parameters.pop("should_plot", False)
             return parameters, should_plot
         except json.JSONDecodeError:
-            logger.error("Failed to decode JSON: %s", json_string)
+            logger.error(f"Failed to decode JSON: {json_string}")
             return {}, False
 
     def describe_database(self) -> pd.DataFrame:
@@ -203,13 +202,12 @@ class LLMDataVisualizer:
                 self._log_sql_query(sql_query)
                 return self._execute_sql_query(sql_query)
             except pd.errors.DatabaseError as e:
-                logger.error("SQL execution error: %s", e)
+                logger.error(f"SQL execution error: {e}")
                 if attempt == 1:
                     logger.error("All retries exhausted. Returning empty DataFrame.")
                     raise e
                 logger.info(
-                    "Retrying SQL generation and execution (%d retries left)...",
-                    attempt - 1,
+                    f"Retrying SQL generation and execution ({attempt - 1} retries left)..."
                 )
         raise RuntimeError("Unexpected error in question_to_dataframe")
 
@@ -228,41 +226,14 @@ class LLMDataVisualizer:
             else self.question_to_dataframe(question, retry_count)
         )
 
-        logger.info("Dataframe shape: %s", dataframe.shape)
-        logger.debug("Dataframe head:\n%s", dataframe.head().to_markdown())
+        logger.info(f"Dataframe shape: {dataframe.shape}")
+        logger.debug(f"Dataframe head:\n{dataframe.head().to_markdown()}")
 
         json_string = self._generate_plot_parameters(question, dataframe, retry_count)
         parameters, should_plot = self._parse_plot_parameters(json_string)
         return self._plotting_engine.plot_data(
             dataframe, parameters, should_plot, show, verbosity
         )
-
-    def save_plot(
-        self,
-        axes: Any,
-        fmt: str = "svg",
-        plots_dir: Optional[Path] = None,
-    ) -> Optional[Path]:
-        """Save the plot associated with the given axes in the specified format."""
-        if plots_dir is None:
-            plots_dir = Path(tempfile.gettempdir())
-        plots_dir.mkdir(parents=True, exist_ok=True)
-        plot_path = (
-            plots_dir / f"plot_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{fmt}"
-        )
-        try:
-            if fmt == "svg":
-                axes.figure.savefig(plot_path, format="svg")
-            elif fmt == "png":
-                axes.figure.savefig(plot_path, format="png", dpi=300)
-            else:
-                logger.error("Unsupported format: %s", fmt)
-                return None
-            logger.info("Plot saved to: %s", plot_path)
-            return plot_path
-        except Exception as e:
-            logger.error("Failed to save plot: %s", e)
-            return None
 
 
 if __name__ == "__main__":

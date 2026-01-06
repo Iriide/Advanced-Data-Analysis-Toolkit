@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import cairosvg
 from PIL import Image
 from pathlib import Path
+from backend.visualizer.services.plotting import save_plot
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 from backend.utils.logger import get_logger
 
@@ -55,7 +56,7 @@ def generate_and_display_schema(visualizer: LLMDataVisualizer) -> None:
     if not schema_path:
         return
 
-    logger.info("Schema saved to: %s", schema_path)
+    logger.info(f"Schema saved to: {schema_path}")
     image = _convert_svg_to_image(schema_path)
     _display_image(image)
 
@@ -63,13 +64,13 @@ def generate_and_display_schema(visualizer: LLMDataVisualizer) -> None:
 def analyze_question(question: str, visualizer: LLMDataVisualizer) -> None:
     """Analyze a question and generate a corresponding visualization."""
     selected_question = _select_question(question)
-    logger.info("\n--- Analyzing: %s ---", selected_question)
+    logger.info(f"\n--- Analyzing: {selected_question} ---")
     ax, _ = visualizer.question_to_plot(selected_question, show=True)
-    visualizer.save_plot(ax, fmt="svg")
+    save_plot(ax, fmt="svg")
 
 
 def print_database_description(visualizer: LLMDataVisualizer) -> None:
     """Display a summary description of the database."""
     logger.info("\n--- Database Description ---")
     description_dataframe = visualizer.describe_database()
-    logger.info("\n%s", description_dataframe.to_markdown())
+    logger.info(f"\n{description_dataframe.to_markdown()}")

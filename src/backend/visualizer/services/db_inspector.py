@@ -206,5 +206,5 @@ if __name__ == "__main__":
     logger = get_logger(__name__)
 
     inspector = DatabaseInspector(Path(arguments.db_path))
-    logger.info("Schema Snippet:\n%s", inspector.export_schema()[:200])
-    logger.info("\nStats Snippet:\n%s", inspector.describe_database().head())
+    logger.info(f"Schema Snippet:\n{inspector.export_schema()[:200]}")
+    logger.info(f"\nStats Snippet:\n{inspector.describe_database().head()}")
