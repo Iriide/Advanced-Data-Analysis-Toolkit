@@ -112,10 +112,10 @@ def _plot_question(
     ax, should_plot = visualizer.question_to_plot(
         question, retry_count=retry_count, show=False, verbosity=1, dataframe=dataframe
     )
-    image_url = save_plot(ax, fmt=fmt, plots_dir=STATIC_DIR / "plots")
-
     if ax is None:
         raise RuntimeError("No axes generated for the question result")
+
+    image_url = save_plot(ax, fmt=fmt, plots_dir=STATIC_DIR / "plots")
     return image_url, bool(should_plot)
 
 
@@ -167,6 +167,9 @@ def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
     global VISUALIZER
 
     database_path = Path(payload.database_path)
+    if not database_path.exists():
+        raise FileNotFoundError(f"Database not found at {database_path}")
+
     model = payload.model
     database_type = str(payload.database_type)
     logger.info(

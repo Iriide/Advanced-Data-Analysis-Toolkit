@@ -144,18 +144,17 @@ class DatabaseInspector:
 
     def describe_table(self, table_name: str) -> pd.DataFrame:
         """Generates statistical description of a specific table."""
-        connection = self.create_connection()
-        cursor = connection.cursor()
-        cursor.execute(f"PRAGMA table_info({table_name});")
-        columns = cursor.fetchall()
+        with self.create_connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(f"PRAGMA table_info({table_name});")
+            columns = cursor.fetchall()
 
-        statistics = {}
-        for _, column_name, data_type, *_ in columns:
-            statistics[column_name] = self._get_column_statistics(
-                cursor, table_name, column_name, data_type
-            )
+            statistics = {}
+            for _, column_name, data_type, *_ in columns:
+                statistics[column_name] = self._get_column_statistics(
+                    cursor, table_name, column_name, data_type
+                )
 
-        connection.close()
         result = pd.DataFrame(statistics).T
         result.insert(0, "dtype", np.array(columns)[:, 2])
         return result
@@ -170,11 +169,10 @@ class DatabaseInspector:
 
     def export_schema(self) -> str:
         """Returns the DDL (Create Table statements) for the database."""
-        connection = self.create_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table'")
-        schema_statements = [row[0] for row in cursor.fetchall() if row[0]]
-        connection.close()
+        with self.create_connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table'")
+            schema_statements = [row[0] for row in cursor.fetchall() if row[0]]
         return "\n".join(schema_statements)
 
     def plot_schema(self) -> Optional[Path]:
