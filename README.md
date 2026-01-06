@@ -52,7 +52,7 @@ docker compose up toolkit-presentation
 
 Which correspond to the `serve`, `serve-dev`, and `serve-presentation` just commands respectively.
 
-All the commmands will launch the server and make it accessible at the configured port.
+All the commands will launch the server and make it accessible at the configured port.
 
 ### Running the CLI
 
