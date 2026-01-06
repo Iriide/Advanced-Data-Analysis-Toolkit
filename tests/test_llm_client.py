@@ -22,6 +22,7 @@ def LLMClientClass(llm_module):
 # clean_markdown_block tests
 # -------------------------
 
+
 def test_clean_markdown_block_strips_fences_and_lang_tag(LLMClientClass):
     def assert_cleaned(text: str, expected: str, block_type: str):
         cleaned = LLMClientClass.clean_markdown_block(text, block_type)
@@ -33,8 +34,12 @@ def test_clean_markdown_block_strips_fences_and_lang_tag(LLMClientClass):
         "print('Hello, World!')",
         "python",
     )
-    assert_cleaned("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?")
-    assert_cleaned("```sqlite\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?")
+    assert_cleaned(
+        "```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"
+    )
+    assert_cleaned(
+        "```sqlite\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"
+    )
 
 
 def test_clean_markdown_block_returns_original_if_no_fences(LLMClientClass):
@@ -62,6 +67,7 @@ def test_clean_markdown_block_whitespace_only_becomes_empty_after_strip(LLMClien
 # -------------------------
 # __init__ tests
 # -------------------------
+
 
 def test_init_calls_load_dotenv_when_enabled(monkeypatch, llm_module):
     called = {"count": 0}
@@ -92,6 +98,7 @@ def test_init_logs_warning_when_api_key_missing(monkeypatch, llm_module):
 
     assert warnings == [f"{llm_module.API_KEY_ENVIRONMENT_VARIABLE} not set"]
 
+
 # -------------------------
 # generate_content success
 # -------------------------
@@ -115,6 +122,7 @@ def test_generate_content_returns_mocked_response(monkeypatch, llm_module):
 # -------------------------
 # generate_content error paths
 # -------------------------
+
 
 def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj):
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
