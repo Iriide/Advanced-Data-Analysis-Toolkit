@@ -1,31 +1,26 @@
+"""Application entry point that dispatches to server or CLI mode."""
+
 import argparse
-import io
 import os
 import logging
-import numpy as np
-import matplotlib.pyplot as plt
 import uvicorn
-import cairosvg
 import subprocess
 import sys
 import threading
 from time import sleep
-from PIL import Image
 from pathlib import Path
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 from backend.utils.logger import configure_logging, get_logger
+from backend.cli.cli import (
+    generate_and_display_schema,
+    analyze_question,
+    print_database_description,
+)
 
 logger: logging.Logger
 
-SAMPLE_QUESTIONS = [
-    "Give me a count of employees grouped by age?",
-    "What are the top 10 most used genres?",
-    "Which genre generated the highest revenue?",
-    "What are the revenues and the number of tracks sold for each genre?",
-]
 
-
-def parse_cli_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
+def _parse_cli_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
     """Add CLI-specific command-line arguments to the parser."""
     parser.add_argument(
         "--question",
@@ -50,7 +45,7 @@ def parse_cli_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
     )
 
 
-def parse_server_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
+def _parse_server_arguments(parser: argparse.ArgumentParser, postfix: str) -> None:
     """Add server-specific command-line arguments to the parser."""
     parser.add_argument(
         "--dev",
@@ -101,8 +96,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Optional path to write logs to a file.",
     )
 
-    parse_cli_arguments(parser, " (CLI mode only).")
-    parse_server_arguments(parser, " (Server mode only).")
+    _parse_cli_arguments(parser, " (CLI mode only).")
+    _parse_server_arguments(parser, " (Server mode only).")
 
     return parser
 
@@ -168,65 +163,16 @@ def run_server(arguments: argparse.Namespace) -> None:
     return
 
 
-def validate_database_path(arguments: argparse.Namespace) -> Path:
+def _validate_database_path(database_path: Path) -> Path:
     """Validate that the database path exists and return it as a Path."""
-    database_path = Path(arguments.database_path)
     if not database_path.exists():
         raise FileNotFoundError(f"Database not found at {database_path}")
     return database_path
 
 
-def convert_svg_to_image(svg_path: Path) -> Image.Image:
-    """Convert an SVG file to a PIL Image."""
-    png_bytes = cairosvg.svg2png(url=str(svg_path), scale=2)
-    return Image.open(io.BytesIO(png_bytes))
-
-
-def display_image(image: Image.Image) -> None:
-    """Display a PIL Image using matplotlib."""
-    plt.imshow(image)
-    plt.axis("off")
-    plt.show()
-
-
-def generate_and_display_schema(visualizer: LLMDataVisualizer) -> None:
-    """Generate the database schema visualization and display it."""
-    logger.info("--- Generating Schema Plot ---")
-    schema_path = visualizer.plot_schema()
-    if not schema_path:
-        return
-
-    logger.info("Schema saved to: %s", schema_path)
-    image = convert_svg_to_image(schema_path)
-    display_image(image)
-
-
-def select_question(question: str) -> str:
-    """Select a random sample question if requested."""
-    if question == "random":
-        selected: str = np.random.choice(SAMPLE_QUESTIONS)
-        print(f"Using random sample: '{selected}'")
-        return selected
-    return question
-
-
-def analyze_question(question: str, visualizer: LLMDataVisualizer) -> None:
-    """Analyze a question and generate a corresponding visualization."""
-    selected_question = select_question(question)
-    logger.info("\n--- Analyzing: %s ---", selected_question)
-    visualizer.question_to_plot(selected_question, show=True)
-
-
-def display_database_description(visualizer: LLMDataVisualizer) -> None:
-    """Display a summary description of the database."""
-    logger.info("\n--- Database Description ---")
-    description_dataframe = visualizer.describe_database()
-    logger.info("\n%s", description_dataframe.to_markdown())
-
-
 def run_cli_mode(arguments: argparse.Namespace) -> None:
     """Execute the application in CLI mode."""
-    database_path = validate_database_path(arguments)
+    database_path = _validate_database_path(Path(arguments.database_path))
     visualizer = LLMDataVisualizer(
         database_path=database_path,
         model=arguments.model,
@@ -237,7 +183,7 @@ def run_cli_mode(arguments: argparse.Namespace) -> None:
     if arguments.question:
         analyze_question(arguments.question, visualizer)
     if arguments.describe:
-        display_database_description(visualizer)
+        print_database_description(visualizer)
 
 
 def main() -> None:

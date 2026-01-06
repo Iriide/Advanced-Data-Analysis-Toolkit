@@ -134,6 +134,25 @@ class PlottingEngine:
                 logger.warning("Plotting failed: %s. Falling back to table.", error)
             return None, False
 
+    def _extract_figure_from_axes(self, axes: Any) -> Optional[Figure]:
+        """Extract a matplotlib Figure object from axes or iterable of axes."""
+        if hasattr(axes, "__iter__") and not isinstance(axes, Axes):
+            for item in axes:
+                if hasattr(item, "get_figure"):
+                    return cast(Figure, item.get_figure())
+            return plt.gcf()
+        if hasattr(axes, "get_figure"):
+            return cast(Figure, axes.get_figure())
+        return plt.gcf()
+
+    def _close_figure(self, axes: Any) -> None:
+        """Close the matplotlib figure associated with the given axes."""
+        try:
+            figure = self._extract_figure_from_axes(axes)
+            plt.close(figure)
+        except (AttributeError, TypeError):
+            plt.close("all")
+
     def plot_data(
         self,
         dataframe: pd.DataFrame,
@@ -177,25 +196,6 @@ class PlottingEngine:
                 "LLM recommended not to plot this result; showing table instead."
             )
         return axes, should_plot
-
-    def _extract_figure_from_axes(self, axes: Any) -> Optional[Figure]:
-        """Extract a matplotlib Figure object from axes or iterable of axes."""
-        if hasattr(axes, "__iter__") and not isinstance(axes, Axes):
-            for item in axes:
-                if hasattr(item, "get_figure"):
-                    return cast(Figure, item.get_figure())
-            return plt.gcf()
-        if hasattr(axes, "get_figure"):
-            return cast(Figure, axes.get_figure())
-        return plt.gcf()
-
-    def _close_figure(self, axes: Any) -> None:
-        """Close the matplotlib figure associated with the given axes."""
-        try:
-            figure = self._extract_figure_from_axes(axes)
-            plt.close(figure)
-        except (AttributeError, TypeError):
-            plt.close("all")
 
 
 if __name__ == "__main__":

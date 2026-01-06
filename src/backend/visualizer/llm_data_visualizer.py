@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Optional, Tuple
 from matplotlib.axes import Axes
 import textwrap
+import tempfile
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
 from backend.visualizer.services.plotting_engine import PlottingEngine
@@ -144,18 +145,6 @@ class LLMDataVisualizer:
         else:
             logger.info("Generated SQL: %s", sql_query)
 
-    def describe_database(self) -> pd.DataFrame:
-        """Return a summary description of the database schema."""
-        return self._database_inspector.describe_database()
-
-    def export_schema(self) -> str:
-        """Export the database schema as a textual representation."""
-        return self._database_inspector.export_schema()
-
-    def plot_schema(self) -> Optional[Path]:
-        """Generate and save a visual representation of the database schema."""
-        return self._database_inspector.plot_schema()
-
     def _generate_sql_query(self, question: str, retry_count: int) -> str:
         """Generate an SQL query from a natural language question."""
         schema = self._database_inspector.export_schema()
@@ -173,6 +162,36 @@ class LLMDataVisualizer:
         )
         logger.debug("Result preview:\n%s", dataframe.head().to_markdown())
         return dataframe
+
+    def _generate_plot_parameters(
+        self, question: str, dataframe: pd.DataFrame, retry_count: int
+    ) -> str:
+        """Generate JSON plot parameters for a dataframe using the LLM."""
+        prompt = self._construct_plot_prompt(question, dataframe)
+        raw_response = self._llm_client.generate_content(prompt, retry_count)
+        return self._llm_client.clean_markdown_block(raw_response, "json")
+
+    def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
+        """Parse plot parameters and plotting decision from JSON."""
+        try:
+            parameters = json.loads(json_string)
+            should_plot = parameters.pop("should_plot", False)
+            return parameters, should_plot
+        except json.JSONDecodeError:
+            logger.error("Failed to decode JSON: %s", json_string)
+            return {}, False
+
+    def describe_database(self) -> pd.DataFrame:
+        """Return a summary description of the database schema."""
+        return self._database_inspector.describe_database()
+
+    def export_schema(self) -> str:
+        """Export the database schema as a textual representation."""
+        return self._database_inspector.export_schema()
+
+    def plot_schema(self) -> Optional[Path]:
+        """Generate and save a visual representation of the database schema."""
+        return self._database_inspector.plot_schema()
 
     def question_to_dataframe(
         self, question: str, retry_count: int = 3
@@ -193,28 +212,6 @@ class LLMDataVisualizer:
                     attempt - 1,
                 )
         raise RuntimeError("Unexpected error in question_to_dataframe")
-
-    def _generate_plot_parameters(
-        self, question: str, dataframe: pd.DataFrame, retry_count: int
-    ) -> str:
-        """Generate JSON plot parameters for a dataframe using the LLM."""
-        prompt = self._construct_plot_prompt(question, dataframe)
-        raw_response = self._llm_client.generate_content(prompt, retry_count)
-        return self._llm_client.clean_markdown_block(raw_response, "json")
-
-    def _validate_plot_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
-        # @TODO: Implement validation logic
-        return parameters
-
-    def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
-        """Parse plot parameters and plotting decision from JSON."""
-        try:
-            parameters = json.loads(json_string)
-            should_plot = parameters.pop("should_plot", False)
-            return parameters, should_plot
-        except json.JSONDecodeError:
-            logger.error("Failed to decode JSON: %s", json_string)
-            return {}, False
 
     def question_to_plot(
         self,
@@ -239,6 +236,33 @@ class LLMDataVisualizer:
         return self._plotting_engine.plot_data(
             dataframe, parameters, should_plot, show, verbosity
         )
+
+    def save_plot(
+        self,
+        axes: Any,
+        fmt: str = "svg",
+        plots_dir: Optional[Path] = None,
+    ) -> Optional[Path]:
+        """Save the plot associated with the given axes in the specified format."""
+        if plots_dir is None:
+            plots_dir = Path(tempfile.gettempdir())
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        plot_path = (
+            plots_dir / f"plot_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{fmt}"
+        )
+        try:
+            if fmt == "svg":
+                axes.figure.savefig(plot_path, format="svg")
+            elif fmt == "png":
+                axes.figure.savefig(plot_path, format="png", dpi=300)
+            else:
+                logger.error("Unsupported format: %s", fmt)
+                return None
+            logger.info("Plot saved to: %s", plot_path)
+            return plot_path
+        except Exception as e:
+            logger.error("Failed to save plot: %s", e)
+            return None
 
 
 if __name__ == "__main__":

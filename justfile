@@ -37,3 +37,6 @@ serve-presentation:
     @echo "\033[31mPLEASE USE WITH CAUTION — THIS MODEL HAS SMALL LIMITS\033[0m"
     @sleep 5
     uv run python src/driver.py --mode server --open-browser --model gemini-2.5-flash
+
+cli:
+    uv run python src/driver.py --mode cli --plot-schema --describe --question "input"
