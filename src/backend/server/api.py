@@ -189,7 +189,7 @@ def get_schema_image() -> Response:
         content = Path(svg_path).read_bytes()
         return Response(content, media_type="image/svg+xml")
     else:
-        logger.exception("Failed to generate schema image")
+        logger.error("Failed to generate schema image")
         raise HTTPException(status_code=500, detail="Failed to generate schema image")
 
 
