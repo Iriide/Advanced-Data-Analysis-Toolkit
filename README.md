@@ -70,13 +70,23 @@ The CLI supports standard logging and verbosity flags. Use `-v` to increase verb
 - `-v`: info messages
 - `-vv` or more: debug messages
 
-
 ## Advanced Python Techniques
 
 This project employs several advanced Python techniques and tools:
 
-- **Unit Testing**: Comprehensive test coverage using `unittest`.
-- **Exception Handling**: Robust error handling to ensure reliability.
+- **Unit Testing**: Comprehensive test coverage using `pytest`.
+- **Pytest Fixtures**: Reusable, isolated test setup using `@pytest.fixture`.
+- **Mocking**: Controlled dependency isolation with `pytest` monkeypatching.
+- **Dataclasses**: Structured, lightweight data containers using `DataClass`.
+- **Type Hinting**: Explicit static typing with Python type annotations to improve readability and tooling support.
+- **Exception Handling**: Explicit and robust error handling to ensure reliability.
+- **Separation of Concerns**: Clear boundaries between API access, retry logic, and application logic.
+- **Configuration via Environment Variables**: Runtime configuration using environment variables and `.env` files.
+- **Logging**: Structured logging for debugging and operational visibility.
+- **Python Environment Management**: Dependency and virtual environment management using `uv`.
+- **Containerization**: Application containerization using Docker and Docker Compose for reproducible environments.
+- **CI Pipeline**: Automated linting checks executed as part of a continuous integration pipeline.
+
 
 ## Development Environment
 
