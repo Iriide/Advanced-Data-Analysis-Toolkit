@@ -1,5 +1,3 @@
-# tests/backend/visualizer/services/test_llm_client.py
-
 import importlib
 from unittest.mock import MagicMock
 
@@ -14,7 +12,7 @@ def llm_module():
 
 
 @pytest.fixture
-def LLMClientClass(llm_module):
+def llm_client_class(llm_module):
     return llm_module.LLMClient
 
 
@@ -23,10 +21,13 @@ def LLMClientClass(llm_module):
 # -------------------------
 
 
-def test_clean_markdown_block_strips_fences_and_lang_tag(LLMClientClass):
+def test_clean_markdown_block_strips_fences_and_lang_tag(llm_client_class):
     def assert_cleaned(text: str, expected: str, block_type: str):
-        cleaned = LLMClientClass.clean_markdown_block(text, block_type)
+        cleaned = llm_client_class.clean_markdown_block(text, block_type)
         assert cleaned == expected
+        # Also test without specifying block_type
+        cleaned = llm_client_class.clean_markdown_block(text)
+        assert expected == cleaned
 
     assert_cleaned("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql")
     assert_cleaned(
@@ -42,26 +43,28 @@ def test_clean_markdown_block_strips_fences_and_lang_tag(LLMClientClass):
     )
 
 
-def test_clean_markdown_block_returns_original_if_no_fences(LLMClientClass):
+def test_clean_markdown_block_returns_original_if_no_fences(llm_client_class):
     text = "SELECT * FROM people;"
-    assert LLMClientClass.clean_markdown_block(text, "sql") == text
+    assert llm_client_class.clean_markdown_block(text, "sql") == text
 
 
-def test_clean_markdown_block_mismatched_delimiters_keeps_content(LLMClientClass):
+def test_clean_markdown_block_mismatched_delimiters_keeps_content(llm_client_class):
     # Missing closing ```
     assert (
-        LLMClientClass.clean_markdown_block("```sql\nSELECT * FROM people;", "sql")
+        llm_client_class.clean_markdown_block("```sql\nSELECT * FROM people;", "sql")
         == "SELECT * FROM people;"
     )
 
 
 @pytest.mark.parametrize("value", [None, ""])
-def test_clean_markdown_block_returns_empty_for_falsy_input(LLMClientClass, value):
-    assert LLMClientClass.clean_markdown_block(value) == ""
+def test_clean_markdown_block_returns_empty_for_falsy_input(llm_client_class, value):
+    assert llm_client_class.clean_markdown_block(value) == ""
 
 
-def test_clean_markdown_block_whitespace_only_becomes_empty_after_strip(LLMClientClass):
-    assert LLMClientClass.clean_markdown_block("   ") == ""
+def test_clean_markdown_block_whitespace_only_becomes_empty_after_strip(
+    llm_client_class,
+):
+    assert llm_client_class.clean_markdown_block("   ") == ""
 
 
 # -------------------------
@@ -71,17 +74,27 @@ def test_clean_markdown_block_whitespace_only_becomes_empty_after_strip(LLMClien
 
 def test_init_calls_load_dotenv_when_enabled(monkeypatch, llm_module):
     called = {"count": 0}
+    retrier_count = {"count": 0}
 
     def fake_load_dotenv():
         called["count"] += 1
 
+    class DummyClient:
+        pass
+
+    class DummyRetrier:
+        def __init__(self):
+            retrier_count["count"] += 1
+
     monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
-    monkeypatch.setattr(llm_module.genai, "Client", lambda: object())
-    monkeypatch.setattr(llm_module, "GeminiAPIRequestRetrier", lambda: object())
+    monkeypatch.setattr(llm_module.genai, "Client", DummyClient)
+    monkeypatch.setattr(llm_module, "GeminiAPIRequestRetrier", DummyRetrier)
 
     llm_module.LLMClient(load_environment=True)
+
     assert called["count"] == 1
+    assert retrier_count["count"] == 1
 
 
 def test_init_logs_warning_when_api_key_missing(monkeypatch, llm_module):
@@ -110,13 +123,57 @@ def test_generate_content_returns_mocked_response(monkeypatch, llm_module):
             self.models = MagicMock()
             self.models.generate_content.return_value.text = "Mocked Response"
 
-    monkeypatch.setattr(llm_module.genai, "Client", FakeGenAIClient)
+    def fake_load_dotenv():
+        pass
 
-    monkeypatch.setattr(llm_module, "load_dotenv", lambda: None)
+    monkeypatch.setattr(llm_module.genai, "Client", FakeGenAIClient)
+    monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
 
     client = llm_module.LLMClient(load_environment=False)
     assert client.generate_content("Hello") == "Mocked Response"
+
+
+def test_generate_content_calls_retrier_with_call_api_and_prompt(
+    monkeypatch, llm_module
+):
+    class FakeGenAIClient:
+        def __init__(self, *args, **kwargs):
+            self.models = MagicMock()
+            self.models.generate_content.return_value.text = "Mocked Response"
+
+    class RetrierStub:
+        def __init__(self):
+            self.reset_arg = None
+            self.run_called_with = None
+
+        def reset_retries(self, n):
+            self.reset_arg = n
+
+        def run(self, fn, prompt):
+            self.run_called_with = (fn, prompt)
+            return fn(prompt)
+
+    def fake_load_dotenv():
+        return
+
+    retrier = RetrierStub()
+
+    monkeypatch.setattr(llm_module.genai, "Client", FakeGenAIClient)
+    monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
+    monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
+
+    client = llm_module.LLMClient(load_environment=False)
+    client._request_retrier = retrier
+
+    response = client.generate_content("Hello", retry_count=7)
+
+    assert response == "Mocked Response"
+    assert retrier.reset_arg == 7
+
+    fn, prompt = retrier.run_called_with
+    assert callable(fn)
+    assert prompt == "Hello"
 
 
 # -------------------------
@@ -132,7 +189,6 @@ def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj):
     client = llm_module.LLMClient(load_environment=False)
     client._request_retrier = retrier_obj
 
-    monkeypatch.setattr(client, "_call_api", lambda prompt: "should_not_be_called")
     return client
 
 
