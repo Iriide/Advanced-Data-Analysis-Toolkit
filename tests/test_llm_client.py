@@ -56,7 +56,6 @@ def test_clean_markdown_block_returns_empty_for_falsy_input(LLMClientClass, valu
 
 
 def test_clean_markdown_block_whitespace_only_becomes_empty_after_strip(LLMClientClass):
-    # This does NOT hit the early-return `if not text` branch, but should still return ""
     assert LLMClientClass.clean_markdown_block("   ") == ""
 
 
@@ -80,10 +79,8 @@ def test_init_calls_load_dotenv_when_enabled(monkeypatch, llm_module):
 
 
 def test_init_logs_warning_when_api_key_missing(monkeypatch, llm_module):
-    # Make sure the key is NOT present
     monkeypatch.delenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, raising=False)
 
-    # Prevent side effects
     monkeypatch.setattr(llm_module, "load_dotenv", lambda: None)
     monkeypatch.setattr(llm_module.genai, "Client", lambda: object())
     monkeypatch.setattr(llm_module, "GeminiAPIRequestRetrier", lambda: object())
@@ -106,10 +103,8 @@ def test_generate_content_returns_mocked_response(monkeypatch, llm_module):
             self.models = MagicMock()
             self.models.generate_content.return_value.text = "Mocked Response"
 
-    # Patch where it's USED (inside the module under test)
     monkeypatch.setattr(llm_module.genai, "Client", FakeGenAIClient)
 
-    # Avoid dotenv and any other side effects
     monkeypatch.setattr(llm_module, "load_dotenv", lambda: None)
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
 
@@ -129,7 +124,6 @@ def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj):
     client = llm_module.LLMClient(load_environment=False)
     client._request_retrier = retrier_obj
 
-    # Ensure no API calls happen in these tests
     monkeypatch.setattr(client, "_call_api", lambda prompt: "should_not_be_called")
     return client
 
