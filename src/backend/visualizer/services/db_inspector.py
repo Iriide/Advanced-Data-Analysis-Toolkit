@@ -68,11 +68,21 @@ class DatabaseInspector:
         }
 
     def _get_column_statistics(
-        self, cursor: sqlite3.Cursor, table_name: str, column_name: str, data_type: str, primary_key_columns: set[str], foreign_key_columns: set[str]
+        self,
+        cursor: sqlite3.Cursor,
+        table_name: str,
+        column_name: str,
+        data_type: str,
+        primary_key_columns: set[str],
+        foreign_key_columns: set[str],
     ) -> dict[str, Optional[float]]:
         """Dispatch to numeric or categorical statistics based on column type."""
-        base_type = data_type.upper().split('(')[0].strip()
-        if base_type in NUMERIC_DATA_TYPES and column_name not in primary_key_columns and column_name not in foreign_key_columns:
+        base_type = data_type.upper().split("(")[0].strip()
+        if (
+            base_type in NUMERIC_DATA_TYPES
+            and column_name not in primary_key_columns
+            and column_name not in foreign_key_columns
+        ):
             return self._get_numeric_column_statistics(cursor, table_name, column_name)
         return self._get_categorical_column_statistics(cursor, table_name, column_name)
 
@@ -156,12 +166,12 @@ class DatabaseInspector:
             statistics = {}
             for _, column_name, data_type, *_ in columns:
                 statistics[column_name] = self._get_column_statistics(
-                    cursor, 
-                    table_name, 
-                    column_name, 
-                    data_type, 
-                    primary_key_columns, 
-                    foreign_key_columns
+                    cursor,
+                    table_name,
+                    column_name,
+                    data_type,
+                    primary_key_columns,
+                    foreign_key_columns,
                 )
 
         result = pd.DataFrame(statistics).T
