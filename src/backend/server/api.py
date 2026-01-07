@@ -3,23 +3,20 @@
 import os
 import logging
 import textwrap
-from pathlib import Path
-from typing import Optional, Any, Dict, AsyncGenerator, Tuple
-
 import numpy as np
 import pandas as pd
 import uvicorn
+from pathlib import Path
+from typing import Optional, Any, Dict, AsyncGenerator, Tuple
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-
 from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 from backend.visualizer.services.plotting import save_plot
 
-# --- Constants ---
 DEFAULT_DB_PATH = Path("data/chinook.db")
 DEFAULT_MODEL = "gemma-3-4b-it"
 SUPPORTED_FORMATS = ("png", "svg", "pdf")
@@ -27,7 +24,6 @@ SUPPORTED_FORMATS = ("png", "svg", "pdf")
 logger = logging.getLogger("uvicorn")
 
 
-# -- Pydantic models for request payload validation --
 class SettingsPayload(BaseModel):
     database_path: str = Field(..., min_length=1)
     database_type: str = Field(default="sqlite")
@@ -92,13 +88,11 @@ else:
 
 VISUALIZER: Optional[LLMDataVisualizer] = None
 
-# --- Helper functions ---
-
-
 def _normalize_image_format(fmt: Optional[str], default: str = "svg") -> str:
     """Normalize and validate the requested output format."""
-    fmt2 = (fmt or default).lower()
-    return fmt2 if fmt2 in SUPPORTED_FORMATS else default
+    if fmt and fmt.lower() in SUPPORTED_FORMATS:
+        return fmt.lower()
+    return default
 
 
 def _plot_question(
@@ -106,7 +100,7 @@ def _plot_question(
     question: str,
     retry_count: int = 3,
     dataframe: Optional[pd.DataFrame] = None,
-    fmt: str = "svg",
+    format: str = "svg",
 ) -> Tuple[Any, bool]:
     """Generate plot axes for a question and return (axes, should_plot)."""
     ax, should_plot = visualizer.question_to_plot(
@@ -115,7 +109,7 @@ def _plot_question(
     if ax is None:
         raise RuntimeError("No axes generated for the question result")
 
-    image_url = save_plot(ax, fmt=fmt, plots_dir=STATIC_DIR / "plots")
+    image_url = save_plot(ax, format=format, plots_dir=STATIC_DIR / "plots")
     return image_url, bool(should_plot)
 
 
@@ -123,9 +117,9 @@ def _dataframe_to_json(df: Optional[pd.DataFrame]) -> Dict[str, Any]:
     """Convert a DataFrame into a JSON-serializable payload."""
     if df is None or df.empty:
         return {"columns": [], "rows": []}
-    df2 = df.reset_index()
-    rows = df2.replace({np.nan: None}).to_dict(orient="records")
-    return {"columns": df2.columns.tolist(), "rows": rows}
+    df_no_index = df.reset_index()
+    rows = df_no_index.replace({np.nan: None}).to_dict(orient="records")
+    return {"columns": df_no_index.columns.tolist(), "rows": rows}
 
 
 def _get_visualizer() -> LLMDataVisualizer:
@@ -171,7 +165,7 @@ def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
         raise FileNotFoundError(f"Database not found at {database_path}")
 
     model = payload.model
-    database_type = str(payload.database_type)
+    database_type = payload.database_type
     logger.info(
         f"Updating settings: db={database_path}, type={database_type}, model={model}",
     )
@@ -208,14 +202,14 @@ def get_database_description() -> JSONResponse:
 
 
 @app.post("/question")
-def question_plot(payload: QuestionPayload, format: str = "svg") -> Response:
+def question_plot(payload: QuestionPayload, format_normalized: str = "svg") -> Response:
     """Answer a question and return a plot URL plus tabular results as JSON."""
     visualizer = _get_visualizer()
     question = payload.question
-    fmt = _normalize_image_format(format, default="svg")
+    format_normalized = _normalize_image_format(format_normalized, default="svg")
 
     df = visualizer.question_to_dataframe(question)
-    image_url, should_plot = _plot_question(visualizer, question, 3, df, fmt)
+    image_url, should_plot = _plot_question(visualizer, question, 3, df, format_normalized)
     df_json = _dataframe_to_json(df)
 
     return JSONResponse(

@@ -2,10 +2,10 @@ import json
 import re
 import argparse
 import pandas as pd
+import textwrap
 from pathlib import Path
 from typing import Any, Optional, Tuple
 from matplotlib.axes import Axes
-import textwrap
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
 from backend.visualizer.services.plotting import PlottingEngine

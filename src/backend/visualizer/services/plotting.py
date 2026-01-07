@@ -186,7 +186,6 @@ def _extract_figure(axes: Any) -> Optional[Figure]:
     if isinstance(axes, Axes):
         fig = axes.get_figure()
     elif isinstance(axes, Iterable):
-        # Handle cases like plt.subplots(2, 2) which return a NumPy array
         for item in np.asarray(axes).flatten():
             if isinstance(item, (Axes, Iterable)):
                 target = list(item)[0] if isinstance(item, Iterable) else item
@@ -198,24 +197,24 @@ def _extract_figure(axes: Any) -> Optional[Figure]:
 
 def save_plot(
     axes: Any,
-    fmt: str = "svg",
+    format: str = "svg",
     plots_dir: Optional[Path] = None,
 ) -> Optional[Path]:
     """Save the plot associated with the given axes in the specified format."""
     if plots_dir is None:
         plots_dir = Path(tempfile.gettempdir())
     plots_dir.mkdir(parents=True, exist_ok=True)
-    plot_path = plots_dir / f"plot_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{fmt}"
+    plot_path = plots_dir / f"plot_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{format}"
     fig = _extract_figure(axes)
     if fig is None:
         logger.error("No figure found to save.")
         return None
-    if fmt == "svg":
+    if format == "svg":
         fig.savefig(plot_path, format="svg")
-    elif fmt == "png":
+    elif format == "png":
         fig.savefig(plot_path, format="png", dpi=300)
     else:
-        logger.error(f"Unsupported format: {fmt}")
+        logger.error(f"Unsupported format: {format}")
         return None
     logger.info(f"Plot saved to: {plot_path}")
     return plot_path
