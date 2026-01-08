@@ -76,7 +76,7 @@ The CLI supports standard logging and verbosity flags. Use `-v` to increase verb
 
 ![Backend module dependency graph](docs/backend-module-dependency-graph.png)
 
-For sake of clarity, the dependencies related to logging have been omitted from the graph.
+For the sake of clarity, the dependencies related to logging have been omitted from the graph.
 
 ## Advanced Python Techniques
 

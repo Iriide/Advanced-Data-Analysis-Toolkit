@@ -37,7 +37,9 @@ def run_server(arguments: argparse.Namespace) -> None:
 
     try:
         if arguments.open_browser:
-            threading.Thread(target=_open_browser, args=(arguments.port,)).start()
+            threading.Thread(
+                target=_open_browser, args=(arguments.port,), daemon=True
+            ).start()
 
         os.environ["LLM_DATA_VISUALIZER_MODEL"] = arguments.model
 
