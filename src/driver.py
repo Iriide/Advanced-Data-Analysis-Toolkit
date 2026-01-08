@@ -1,21 +1,10 @@
 """Application entry point that dispatches to server or CLI mode."""
 
 import argparse
-import os
 import logging
-import uvicorn
-import subprocess
-import sys
-import threading
-from time import sleep
-from pathlib import Path
-from backend.visualizer.llm_data_visualizer import LLMDataVisualizer
 from backend.utils.logger import configure_logging, get_logger
-from backend.cli.cli import (
-    generate_and_display_schema,
-    analyze_question,
-    print_database_description,
-)
+from backend.cli.cli import run_cli
+from backend.server.server import run_server
 
 logger: logging.Logger
 
@@ -122,70 +111,6 @@ def initialize_logging(arguments: argparse.Namespace) -> None:
     logger = get_logger(__name__)
 
 
-def _open_browser(port: int, delay: int = 3) -> None:
-    """Open the default web browser to the local server after an optional delay."""
-    if delay and delay > 0:
-        sleep(delay)
-    browser_opened = subprocess.call(
-        [
-            sys.executable,
-            "-c",
-            f"import webbrowser; webbrowser.open('http://localhost:{port}')",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    if browser_opened == 0:
-        logger.info(f"Opened web browser to http://localhost:{port}")
-    else:
-        logger.warning("Failed to open web browser automatically.")
-
-
-def run_server(arguments: argparse.Namespace) -> None:
-    """Start the FastAPI server using uvicorn."""
-    logger.info("--- Starting Server ---")
-
-    try:
-        if arguments.open_browser:
-            threading.Thread(target=_open_browser, args=(arguments.port,)).start()
-
-        os.environ["LLM_DATA_VISUALIZER_MODEL"] = arguments.model
-
-        uvicorn.run(
-            "backend.server.api:app",
-            host="0.0.0.0",
-            port=arguments.port,
-            reload=arguments.dev,
-        )
-
-    except KeyboardInterrupt:
-        logger.info("Server stopped by user.")
-    return
-
-
-def _validate_database_path(database_path: Path) -> Path:
-    """Validate that the database path exists and return it as a Path."""
-    if not database_path.exists():
-        raise FileNotFoundError(f"Database not found at {database_path}")
-    return database_path
-
-
-def run_cli_mode(arguments: argparse.Namespace) -> None:
-    """Execute the application in CLI mode."""
-    database_path = _validate_database_path(Path(arguments.database_path))
-    visualizer = LLMDataVisualizer(
-        database_path=database_path,
-        model=arguments.model,
-    )
-
-    if arguments.plot_schema:
-        generate_and_display_schema(visualizer)
-    if arguments.question:
-        analyze_question(arguments.question, visualizer)
-    if arguments.describe:
-        print_database_description(visualizer)
-
-
 def main() -> None:
     """Entry point for the application."""
     arguments = parse_arguments()
@@ -193,9 +118,8 @@ def main() -> None:
 
     if arguments.mode == "server":
         run_server(arguments)
-        return
-
-    run_cli_mode(arguments)
+    else:
+        run_cli(arguments)
 
 
 if __name__ == "__main__":
