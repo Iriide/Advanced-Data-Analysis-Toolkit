@@ -1,5 +1,6 @@
 """Command-line interface logic for non-server mode execution."""
 
+import argparse
 import io
 import logging
 import numpy as np
@@ -74,3 +75,18 @@ def print_database_description(visualizer: LLMDataVisualizer) -> None:
     logger.info("\n--- Database Description ---")
     description_dataframe = visualizer.describe_database()
     logger.info(f"\n{description_dataframe.to_markdown()}")
+
+
+def run_cli(arguments: argparse.Namespace) -> None:
+    """Execute the application in CLI mode."""
+    visualizer = LLMDataVisualizer(
+        database_path=Path(arguments.database_path),
+        model=arguments.model,
+    )
+
+    if arguments.plot_schema:
+        generate_and_display_schema(visualizer)
+    if arguments.question:
+        analyze_question(arguments.question, visualizer)
+    if arguments.describe:
+        print_database_description(visualizer)

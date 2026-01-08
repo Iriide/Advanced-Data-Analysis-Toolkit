@@ -70,6 +70,14 @@ The CLI supports standard logging and verbosity flags. Use `-v` to increase verb
 - `-v`: info messages
 - `-vv` or more: debug messages
 
+## Architecture
+
+### Module Dependency Graphs
+
+![Backend module dependency graph](docs/backend-module-dependency-graph.png)
+
+For the sake of clarity, the dependencies related to logging have been omitted from the graph.
+
 ## Advanced Python Techniques
 
 This project employs several advanced Python techniques and tools:

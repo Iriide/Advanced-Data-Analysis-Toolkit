@@ -162,11 +162,9 @@ def update_settings(payload: SettingsPayload) -> Dict[str, Any]:
     global VISUALIZER
 
     database_path = Path(payload.database_path)
-    if not database_path.exists():
-        raise FileNotFoundError(f"Database not found at {database_path}")
-
-    model = payload.model
     database_type = payload.database_type
+    model = payload.model
+
     logger.info(
         f"Updating settings: db={database_path}, type={database_type}, model={model}",
     )
