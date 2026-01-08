@@ -89,10 +89,10 @@ else:
 VISUALIZER: Optional[LLMDataVisualizer] = None
 
 
-def _normalize_image_format(fmt: Optional[str], default: str = "svg") -> str:
+def _normalize_image_format(format: Optional[str], default: str = "svg") -> str:
     """Normalize and validate the requested output format."""
-    if fmt and fmt.lower() in SUPPORTED_FORMATS:
-        return fmt.lower()
+    if format and format.lower() in SUPPORTED_FORMATS:
+        return format.lower()
     return default
 
 
