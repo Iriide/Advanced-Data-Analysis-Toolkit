@@ -66,7 +66,7 @@ def analyze_question(question: str, visualizer: LLMDataVisualizer) -> None:
     selected_question = _select_question(question)
     logger.info(f"\n--- Analyzing: {selected_question} ---")
     ax, _ = visualizer.question_to_plot(selected_question, show=True)
-    save_plot(ax, fmt="svg")
+    save_plot(ax, format="svg")
 
 
 def print_database_description(visualizer: LLMDataVisualizer) -> None:

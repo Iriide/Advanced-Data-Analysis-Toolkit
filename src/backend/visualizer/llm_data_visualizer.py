@@ -2,10 +2,10 @@ import json
 import re
 import argparse
 import pandas as pd
+import textwrap
 from pathlib import Path
 from typing import Any, Optional, Tuple
 from matplotlib.axes import Axes
-import textwrap
 from backend.visualizer.services.db_inspector import DatabaseInspector
 from backend.visualizer.services.llm_client import LLMClient
 from backend.visualizer.services.plotting import PlottingEngine
@@ -170,11 +170,24 @@ class LLMDataVisualizer:
         raw_response = self._llm_client.generate_content(prompt, retry_count)
         return self._llm_client.clean_markdown_block(raw_response, "json")
 
+    def _validate_plot_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Validate and sanitize plot parameters."""
+        valid_parameters_keys = [
+            line.split(",")[0]
+            for line in self._plot_parameters_text.splitlines()
+            if not line.startswith(" ")
+        ]
+        sanitized_parameters = {
+            k: v for k, v in parameters.items() if k in valid_parameters_keys
+        }
+        return sanitized_parameters
+
     def _parse_plot_parameters(self, json_string: str) -> Tuple[dict[str, Any], bool]:
         """Parse plot parameters and plotting decision from JSON."""
         try:
             parameters = json.loads(json_string)
             should_plot = parameters.pop("should_plot", False)
+            parameters = self._validate_plot_parameters(parameters)
             return parameters, should_plot
         except json.JSONDecodeError:
             logger.error(f"Failed to decode JSON: {json_string}")
@@ -244,3 +257,5 @@ if __name__ == "__main__":
     logger.info("Initializing Visualizer...")
     visualizer = LLMDataVisualizer(Path(arguments.database_path))
     logger.info(visualizer.export_schema()[:100])
+
+    print(visualizer._plot_parameters_text)
