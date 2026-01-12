@@ -22,39 +22,32 @@ def fake_load_dotenv(monkeypatch, llm_module):
     return mock_load_dotenv
 
 
-# -------------------------
-# clean_markdown_block tests
-# -------------------------
+@pytest.mark.parametrize("text,expected,block_type", [
+    ("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql"),
+    ("```python\nprint('Hello, World!')\n```", "print('Hello, World!')", "python"),
+    ("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"),
+    ("```sqlite\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"),
+])
+def test_clean_markdown_block_strips_fences_and_lang_tag(llm_client_class, text, expected, block_type):
+    # when
+    cleaned = llm_client_class.clean_markdown_block(text, block_type)
+    cleaned_without_block_type = llm_client_class.clean_markdown_block(text)
 
-
-def test_clean_markdown_block_strips_fences_and_lang_tag(llm_client_class):
-    def assert_cleaned(text: str, expected: str, block_type: str):
-        cleaned = llm_client_class.clean_markdown_block(text, block_type)
-        assert expected == cleaned
-        # Also test without specifying block_type
-        cleaned = llm_client_class.clean_markdown_block(text)
-        assert expected == cleaned
-
-    assert_cleaned("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql")
-    assert_cleaned(
-        "```python\nprint('Hello, World!')\n```",
-        "print('Hello, World!')",
-        "python",
-    )
-    assert_cleaned(
-        "```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"
-    )
-    assert_cleaned(
-        "```sqlite\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"
-    )
+    # then
+    assert expected == cleaned
+    assert expected == cleaned_without_block_type
 
 
 def test_clean_markdown_block_returns_original_if_no_fences(llm_client_class):
+    # given
     text = "SELECT * FROM people;"
+    
+    # when & then
     assert llm_client_class.clean_markdown_block(text, "sql") == text
 
 
 def test_clean_markdown_block_mismatched_delimiters_keeps_content(llm_client_class):
+    # when & then
     # Missing closing ```
     assert (
         llm_client_class.clean_markdown_block("```sql\nSELECT * FROM people;", "sql")
@@ -64,23 +57,21 @@ def test_clean_markdown_block_mismatched_delimiters_keeps_content(llm_client_cla
 
 @pytest.mark.parametrize("value", [None, ""])
 def test_clean_markdown_block_returns_empty_for_falsy_input(llm_client_class, value):
+    # when & then
     assert llm_client_class.clean_markdown_block(value) == ""
 
 
 def test_clean_markdown_block_whitespace_only_becomes_empty_after_strip(
     llm_client_class,
 ):
+    # when & then
     assert llm_client_class.clean_markdown_block("   ") == ""
-
-
-# -------------------------
-# __init__ tests
-# -------------------------
 
 
 def test_init_initializes_dependencies_when_load_environment_enabled(
     monkeypatch, llm_module
 ):
+    # given
     dotenv_calls = {"count": 0}
     retrier_count = {"count": 0}
 
@@ -99,8 +90,10 @@ def test_init_initializes_dependencies_when_load_environment_enabled(
     monkeypatch.setattr(llm_module.genai, "Client", DummyClient)
     monkeypatch.setattr(llm_module, "GeminiAPIRequestRetrier", DummyRetrier)
 
+    # when
     llm_module.LLMClient(load_environment=True)
 
+    # then
     assert dotenv_calls["count"] == 1
     assert retrier_count["count"] == 1
 
@@ -108,6 +101,7 @@ def test_init_initializes_dependencies_when_load_environment_enabled(
 def test_init_logs_warning_when_api_key_missing(
     monkeypatch, llm_module, fake_load_dotenv
 ):
+    # given
     class DummyRetrier:
         pass
 
@@ -115,7 +109,6 @@ def test_init_logs_warning_when_api_key_missing(
         pass
 
     monkeypatch.delenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, raising=False)
-
     monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
     monkeypatch.setattr(llm_module.genai, "Client", DummyClient)
     monkeypatch.setattr(llm_module, "GeminiAPIRequestRetrier", DummyRetrier)
@@ -123,19 +116,17 @@ def test_init_logs_warning_when_api_key_missing(
     warnings = []
     monkeypatch.setattr(llm_module.logger, "warning", lambda msg: warnings.append(msg))
 
+    # when
     llm_module.LLMClient(load_environment=False)
 
+    # then
     assert warnings == [f"{llm_module.API_KEY_ENVIRONMENT_VARIABLE} not set"]
-
-
-# -------------------------
-# generate_content success
-# -------------------------
 
 
 def test_generate_content_returns_mocked_response(
     monkeypatch, llm_module, fake_load_dotenv
 ):
+    # given
     class FakeGenAIClient:
         def __init__(self, *args, **kwargs):
             self.models = MagicMock()
@@ -145,13 +136,17 @@ def test_generate_content_returns_mocked_response(
     monkeypatch.setattr(llm_module, "load_dotenv", fake_load_dotenv)
     monkeypatch.setenv(llm_module.API_KEY_ENVIRONMENT_VARIABLE, "x")
 
+    # when
     client = llm_module.LLMClient(load_environment=False)
+    
+    # then
     assert client.generate_content("Hello") == "Mocked Response"
 
 
 def test_generate_content_calls_retrier_with_call_api_and_prompt(
     monkeypatch, llm_module, fake_load_dotenv
 ):
+    # given
     class FakeGenAIClient:
         def __init__(self, *args, **kwargs):
             self.models = MagicMock()
@@ -178,19 +173,16 @@ def test_generate_content_calls_retrier_with_call_api_and_prompt(
     client = llm_module.LLMClient(load_environment=False)
     client._request_retrier = retrier
 
+    # when
     response = client.generate_content("Hello", retry_count=7)
 
+    # then
     assert response == "Mocked Response"
     assert retrier.reset_arg == 7
 
     fn, prompt = retrier.run_called_with
     assert callable(fn)
     assert prompt == "Hello"
-
-
-# -------------------------
-# generate_content error paths
-# -------------------------
 
 
 def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj, fake_load_dotenv):
@@ -210,6 +202,7 @@ def _make_client_with_retrier(monkeypatch, llm_module, retrier_obj, fake_load_do
 def test_generate_content_raises_source_exhausted_and_logs(
     monkeypatch, llm_module, fake_load_dotenv
 ):
+    # given
     class RetrierStub:
         def __init__(self):
             self.reset_arg = None
@@ -228,9 +221,11 @@ def test_generate_content_raises_source_exhausted_and_logs(
         monkeypatch, llm_module, retrier, fake_load_dotenv
     )
 
+    # when
     with pytest.raises(llm_module.GeminiAPIRequestRetrier.SourceExhaustedError):
         client.generate_content("hi", retry_count=3)
 
+    # then
     assert retrier.reset_arg == 3
     assert any("LLM API call failed after 3 retries" in m for m in errors)
 
@@ -238,6 +233,7 @@ def test_generate_content_raises_source_exhausted_and_logs(
 def test_generate_content_raises_runtime_error_and_logs(
     monkeypatch, llm_module, fake_load_dotenv
 ):
+    # given
     class RetrierStub:
         def __init__(self):
             self.reset_arg = None
@@ -250,14 +246,17 @@ def test_generate_content_raises_runtime_error_and_logs(
 
     retrier = RetrierStub()
     errors = []
+    
     monkeypatch.setattr(llm_module.logger, "error", lambda msg: errors.append(msg))
 
     client = _make_client_with_retrier(
         monkeypatch, llm_module, retrier, fake_load_dotenv
     )
 
+    # when
     with pytest.raises(RuntimeError):
         client.generate_content("hi", retry_count=5)
 
+    # then
     assert retrier.reset_arg == 5
     assert any("LLM API call failed with runtime error: boom" in m for m in errors)
