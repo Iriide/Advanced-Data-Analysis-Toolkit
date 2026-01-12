@@ -88,6 +88,7 @@ else:
 
 VISUALIZER: Optional[LLMDataVisualizer] = None
 
+
 def _normalize_image_format(fmt: Optional[str], default: str = "svg") -> str:
     """Normalize and validate the requested output format."""
     if fmt and fmt.lower() in SUPPORTED_FORMATS:
@@ -209,7 +210,9 @@ def question_plot(payload: QuestionPayload, format_normalized: str = "svg") -> R
     format_normalized = _normalize_image_format(format_normalized, default="svg")
 
     df = visualizer.question_to_dataframe(question)
-    image_url, should_plot = _plot_question(visualizer, question, 3, df, format_normalized)
+    image_url, should_plot = _plot_question(
+        visualizer, question, 3, df, format_normalized
+    )
     df_json = _dataframe_to_json(df)
 
     return JSONResponse(

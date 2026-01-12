@@ -204,7 +204,9 @@ def save_plot(
     if plots_dir is None:
         plots_dir = Path(tempfile.gettempdir())
     plots_dir.mkdir(parents=True, exist_ok=True)
-    plot_path = plots_dir / f"plot_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{format}"
+    plot_path = (
+        plots_dir / f"plot_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{format}"
+    )
     fig = _extract_figure(axes)
     if fig is None:
         logger.error("No figure found to save.")

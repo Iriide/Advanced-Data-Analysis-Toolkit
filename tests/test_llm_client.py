@@ -22,13 +22,18 @@ def fake_load_dotenv(monkeypatch, llm_module):
     return mock_load_dotenv
 
 
-@pytest.mark.parametrize("text,expected,block_type", [
-    ("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql"),
-    ("```python\nprint('Hello, World!')\n```", "print('Hello, World!')", "python"),
-    ("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"),
-    ("```sqlite\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"),
-])
-def test_clean_markdown_block_strips_fences_and_lang_tag(llm_client_class, text, expected, block_type):
+@pytest.mark.parametrize(
+    "text,expected,block_type",
+    [
+        ("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql"),
+        ("```python\nprint('Hello, World!')\n```", "print('Hello, World!')", "python"),
+        ("```sql\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"),
+        ("```sqlite\nSELECT * FROM people;\n```", "SELECT * FROM people;", "sql(ite)?"),
+    ],
+)
+def test_clean_markdown_block_strips_fences_and_lang_tag(
+    llm_client_class, text, expected, block_type
+):
     # when
     cleaned = llm_client_class.clean_markdown_block(text, block_type)
     cleaned_without_block_type = llm_client_class.clean_markdown_block(text)
@@ -41,7 +46,7 @@ def test_clean_markdown_block_strips_fences_and_lang_tag(llm_client_class, text,
 def test_clean_markdown_block_returns_original_if_no_fences(llm_client_class):
     # given
     text = "SELECT * FROM people;"
-    
+
     # when & then
     assert llm_client_class.clean_markdown_block(text, "sql") == text
 
@@ -138,7 +143,7 @@ def test_generate_content_returns_mocked_response(
 
     # when
     client = llm_module.LLMClient(load_environment=False)
-    
+
     # then
     assert client.generate_content("Hello") == "Mocked Response"
 
@@ -246,7 +251,7 @@ def test_generate_content_raises_runtime_error_and_logs(
 
     retrier = RetrierStub()
     errors = []
-    
+
     monkeypatch.setattr(llm_module.logger, "error", lambda msg: errors.append(msg))
 
     client = _make_client_with_retrier(
