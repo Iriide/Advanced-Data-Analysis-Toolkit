@@ -26,7 +26,7 @@ class LLMDataVisualizer:
         model: str = "gemma-3-4b-it",
         plot_parameters_file_path: Optional[Path] = None,
     ):
-        self._database_path = database_path
+        self._database_path = self._validate_database_path(database_path)
         self._database_type = database_type
         self._database_inspector = DatabaseInspector(
             self._database_path, self._database_type
@@ -36,6 +36,12 @@ class LLMDataVisualizer:
         self._plot_parameters_text = self._load_plot_parameters(
             plot_parameters_file_path
         )
+
+    def _validate_database_path(self, database_path: Path) -> Path:
+        """Validate that the database path exists and return it as a Path."""
+        if not database_path.exists():
+            raise FileNotFoundError(f"Database not found at {database_path}")
+        return database_path
 
     def _load_plot_parameters(self, path: Optional[Path]) -> str:
         """Loads and sanitizes the plot parameters definition file."""
