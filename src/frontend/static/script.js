@@ -69,6 +69,9 @@ async function initTopRow() {
             if (value === null || value === undefined || value === '') {
                 return '<span style="opacity: 0.25;">N/A</span>';
             }
+            if (['count', 'null', 'unique'].includes(String(column).toLowerCase())) {
+                return parseInt(value, 10).toString();
+            }
             if (!isNaN(value) && !isNaN(parseFloat(value))) {
                 return parseFloat(value).toFixed(2);
             }
@@ -86,13 +89,19 @@ async function initTopRow() {
             return `<i>${value}</i>`;
         }
 
-        const header_col = Object.keys(rows[0] || {});
+        function extractKeyIndicator(row) {
+            if (row['key'] === 'PK') return ' <sup style="color: red;">PK</sup>';
+            if (row['key'] === 'FK') return ' <sup style="color: orange;">FK</sup>';
+            return '';
+        }
 
+        const header_col = Object.keys(rows[0] || {});
+        const key_col_idx = header_col.findIndex(c => c.toLowerCase() === 'key');
         const tableHtml = `
                     <div style="max-height: 100%; overflow-y: auto; width: 100%; border: 1px solid #dee2e6; border-radius: 5px;">
                         <table class="table table-striped" style="border-collapse: collapse; width: 100%; border: 1px solid #dee2e6;">
                         <thead style="z-index:2; position: sticky; top: 0; background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                            <tr>${Object.keys(rows[0] || {}).map(key => `<th style="text-align: center; border: 1px solid #dee2e6; padding: 8px; border-bottom: 2px solid #dee2e6;">${key.toUpperCase()}</th>`).join('')}</tr>
+                            <tr>${Object.keys(rows[0] || {}).filter((_, idx) => idx !== key_col_idx).map(key => `<th style="text-align: center; border: 1px solid #dee2e6; padding: 8px; border-bottom: 2px solid #dee2e6;">${key.toUpperCase()}</th>`).join('')}</tr>
                         </thead>
                         <tbody>
                             ${rows.map((row, row_idx) => `
@@ -105,7 +114,8 @@ async function initTopRow() {
                     return ''; // Skip rendering for duplicate rows
                 }
             }
-            if (col_idx == 1) return `<th style="border: 1px solid #dee2e6; padding: 8px;">${applyIndexStyle(value)}</th>`;
+            if (col_idx == 1) return `<th style="border: 1px solid #dee2e6; padding: 8px;">${applyIndexStyle(value + extractKeyIndicator(row))}</th>`;
+            if (col_idx === key_col_idx) return ''; // skip 'key' column
             return `<td style="border: 1px solid #dee2e6; padding: 8px;">${renderValue(value, header_col[col_idx])}</td>`;
         }).join('')}</tr>
                         `).join('')}
@@ -1186,6 +1196,20 @@ async function downloadResultAll() {
     }
 }
 
+function removeCurtain(){
+
+
+    let curtain = document.getElementById('curtain')
+    if (!curtain) return;
+
+    setTimeout(() => {
+        curtain.style.animation = 'fadeOut 1s forwards';
+    }, 1000);
+    setTimeout(() => {
+        curtain.remove();
+    }, 2000);
+}
+
 // attach download buttons after DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     const sbtn = document.getElementById('downloadSchemaBtn');
@@ -1201,4 +1225,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rall) rall.addEventListener('click', downloadResultAll);
     // ensure result controls are disabled until a result is available
     try { setResultControlsEnabled(false); } catch (e) { }
+
+    // remove curtain after all init done
+    removeCurtain();
+
 });

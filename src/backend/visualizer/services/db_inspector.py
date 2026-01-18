@@ -32,12 +32,17 @@ class DatabaseInspector:
         """Compute basic statistics for a numeric column."""
 
         query = f"""
-            SELECT COUNT([{column_name}]), MIN([{column_name}]), AVG([{column_name}]), MAX([{column_name}])
+            SELECT COUNT([{column_name}]),
+               SUM(CASE WHEN [{column_name}] IS NULL THEN 1 ELSE 0 END),
+               MIN([{column_name}]),
+               AVG([{column_name}]),
+               MAX([{column_name}])
             FROM {table_name};
         """
-        count, minimum, mean, maximum = cursor.execute(query).fetchone()
+        count, null, minimum, mean, maximum = cursor.execute(query).fetchone()
         return {
             "count": count,
+            "null": null,
             "min": minimum,
             "mean": mean,
             "max": maximum,
@@ -51,14 +56,19 @@ class DatabaseInspector:
     ) -> dict[str, Optional[float]]:
         """Compute frequency-based statistics for a categorical column."""
         query = f"""
-            SELECT COUNT([{column_name}]), COUNT(DISTINCT [{column_name}]),
-            (SELECT [{column_name}] FROM {table_name} GROUP BY [{column_name}] ORDER BY COUNT(*) DESC LIMIT 1),
-            (SELECT COUNT(*) FROM {table_name} GROUP BY [{column_name}] ORDER BY COUNT(*) DESC LIMIT 1)
+            SELECT COUNT([{column_name}]),
+               COUNT(DISTINCT [{column_name}]),
+               SUM(CASE WHEN [{column_name}] IS NULL THEN 1 ELSE 0 END),
+               (SELECT [{column_name}] FROM {table_name} GROUP BY [{column_name}] ORDER BY COUNT(*) DESC LIMIT 1),
+               (SELECT COUNT(*) FROM {table_name} GROUP BY [{column_name}] ORDER BY COUNT(*) DESC LIMIT 1)
             FROM {table_name};
         """
-        count, unique_count, top_value, top_frequency = cursor.execute(query).fetchone()
+        count, unique_count, null, top_value, top_frequency = cursor.execute(
+            query
+        ).fetchone()
         return {
             "count": count,
+            "null": null,
             "min": pd.NA,
             "mean": pd.NA,
             "max": pd.NA,
@@ -78,13 +88,24 @@ class DatabaseInspector:
     ) -> dict[str, Optional[float]]:
         """Dispatch to numeric or categorical statistics based on column type."""
         base_type = data_type.upper().split("(")[0].strip()
-        if (
-            base_type in NUMERIC_DATA_TYPES
-            and column_name not in primary_key_columns
-            and column_name not in foreign_key_columns
-        ):
-            return self._get_numeric_column_statistics(cursor, table_name, column_name)
-        return self._get_categorical_column_statistics(cursor, table_name, column_name)
+        is_key_column = (
+            column_name in primary_key_columns or column_name in foreign_key_columns
+        )
+        if is_key_column or base_type not in NUMERIC_DATA_TYPES:
+            statistics = self._get_categorical_column_statistics(
+                cursor, table_name, column_name
+            )
+        else:
+            statistics = self._get_numeric_column_statistics(
+                cursor, table_name, column_name
+            )
+
+        if is_key_column:
+            statistics["unique"] = None
+            statistics["top"] = None
+            statistics["freq"] = None
+
+        return statistics
 
     def _get_table_names(self) -> list[str]:
         """Return a list of user-defined table names in the database."""
@@ -175,6 +196,15 @@ class DatabaseInspector:
                 )
 
         result = pd.DataFrame(statistics).T
+        result.insert(0, "key", np.array(columns)[:, 1])
+        result["key"] = result["key"].astype("string")
+        result["key"] = result["key"].where(
+            ~result["key"].isin(primary_key_columns), other="PK"
+        )
+        result["key"] = result["key"].where(
+            ~result["key"].isin(foreign_key_columns), other="FK"
+        )
+        result[["count", "null"]] = result[["count", "null"]].astype("Int64")
         result.insert(0, "dtype", np.array(columns)[:, 2])
         return result
 

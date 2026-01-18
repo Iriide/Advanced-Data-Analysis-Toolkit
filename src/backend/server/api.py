@@ -196,7 +196,7 @@ def get_database_description() -> JSONResponse:
     df = visualizer.describe_database()
     if df is None or df.empty:
         return JSONResponse(content={"rows": []})
-    records = df.reset_index().to_dict(orient="records")
+    records = df.reset_index().replace({pd.NA: None}).to_dict(orient="records")
     return JSONResponse(content={"rows": records})
 
 
