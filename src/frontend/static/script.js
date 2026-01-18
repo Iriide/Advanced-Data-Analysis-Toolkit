@@ -1197,8 +1197,6 @@ async function downloadResultAll() {
 }
 
 function removeCurtain(){
-
-
     let curtain = document.getElementById('curtain')
     if (!curtain) return;
 
