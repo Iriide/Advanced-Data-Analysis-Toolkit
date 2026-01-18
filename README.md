@@ -1,25 +1,56 @@
+![](docs/screen.png)
+
 # Advanced Data Analysis Toolkit
 
 ## Overview
 
-The Advanced Data Analysis Toolkit is a versatile tool designed for analyzing and visualizing relational databases. It enables users to connect to databases, inspect schemas, perform exploratory data analysis, and generate reusable reports. The toolkit leverages advanced Python techniques and modern development practices to ensure scalability, maintainability, and ease of use.
+The Advanced Data Analysis Toolkit is a powerful solution for analyzing and visualizing relational databases. It allows users to connect to databases, explore schemas, perform in-depth data analysis, and generate reusable reports. The toolkit is built with advanced Python techniques and modern development practices for scalability, maintainability, and ease of use.
 
 ## Features
 
 ### Reports
 
-Each report consists of two components:
+Reports are composed of two main sections:
 
 #### Generic Section
 
-- **Schema Diagram**: Visual representation of tables, primary keys, foreign keys, and relationships.
-- **Data Quality Overview**: Summaries of missing values, null distributions, and column-level completeness.
-- **Descriptive Statistics**: Ranges, percentiles, distributions, and outlier indicators for numerical fields.
+- **Schema Diagram**: Visualizes tables, primary keys, foreign keys, and their relationships.
+- **Data Quality Overview**: Summarizes missing values, null distributions, and column completeness.
+- **Descriptive Statistics**: Provides ranges, percentiles, distributions, and outlier detection for numerical fields.
+
+![](docs/generic-section.png)
 
 #### Dynamic Section
-- **Prompt-Driven Queries**: User-defined prompts are converted into SQL queries using a Retrieval-Augmented Generation (RAG) model.
-- **Result Tables**: Outputs of the executed queries.
-- **Visualizations**: Graphical representations of the results.
+
+- **Prompt-Driven Queries**: User prompts are transformed into SQL queries using a Retrieval-Augmented Generation (RAG) model.
+    - Includes a random question generator for exploratory analysis.
+- **Result Tables**: Displays outputs from executed queries.
+- **Visualizations**: Presents graphical representations of query results.
+
+![](docs/dynamic-section.png)
+
+Example dynamic analysis questions for the Chinook database:
+
+- How many employees are there in each age group?
+- Which are the top 10 most frequently used genres (with usage counts)?
+- Which genre has generated the highest total revenue?
+- What are the total revenues and number of tracks sold for each genre (subplots/bar plots with two axes)?
+
+### Supported Databases
+
+Currently, the toolkit supports:
+
+- SQLite
+
+Database type and connection URL can be configured in the settings.
+
+### Visualizations & Exporting
+
+Diagrams and result tables can be expanded into preview windows for enhanced visibility. The preview supports zooming, panning, and uses SVG rendering for high-quality graphics.
+
+All images and tables can be exported as SVG or CSV files.
+
+![](img/preview.png)
 
 ## Usage
 
@@ -77,6 +108,10 @@ The CLI supports standard logging and verbosity flags. Use `-v` to increase verb
 ![Backend module dependency graph](docs/backend-module-dependency-graph.png)
 
 For the sake of clarity, the dependencies related to logging have been omitted from the graph.
+
+### Frontend-Backend Interaction
+
+The frontend and backend communicate via a RESTful API. The frontend sends requests to the backend for data retrieval, report generation, and other operations. The backend processes these requests, interacts with the database, and returns the results to the frontend for display. Frontend components are hosted as static files served by the backend.
 
 ## Advanced Python Techniques
 
