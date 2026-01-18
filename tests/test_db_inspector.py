@@ -17,11 +17,15 @@ def create_test_db(path: Path) -> None:
 
 
 def test_database_inspector_execute_query_and_describe(tmp_path: Path):
+    # given
     database_path = tmp_path / "test.db"
     create_test_db(database_path)
 
+    # when
     inspector = DatabaseInspector(database_path=database_path, database_type="sqlite")
     df = inspector.execute_query("SELECT * FROM people ORDER BY id;")
+
+    # then
     assert isinstance(df, pd.DataFrame)
     assert df.shape[0] == 3
     assert list(df.columns) == ["id", "name", "age"]
